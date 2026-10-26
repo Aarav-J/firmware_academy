@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.pico/
+.stm32/
+.env
+.env.*
+*.log
+.DS_Store

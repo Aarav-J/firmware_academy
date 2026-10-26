@@ -1,0 +1,40 @@
+{
+  "name": "firmware-academy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "dev:native": "FIRMWARE_COMPILER_MODE=native npm run dev",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx server/index.ts",
+    "start:native": "FIRMWARE_COMPILER_MODE=native npm start",
+    "setup:pico": "tsx scripts/setup-pico.ts",
+    "test:native": "FIRMWARE_COMPILER_MODE=native npm test",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@phosphor-icons/react": "^2.1.10",
+    "@uiw/react-codemirror": "^4.23.0",
+    "avr8js": "^0.21.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "rp2040js": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.2.0"
+  }
+}

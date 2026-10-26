@@ -1,0 +1,44 @@
+/* Match the shared STM32F407 Renode platform's 16 MHz HSI clock. */
+&clk_hsi {
+	status = "okay";
+};
+
+&clk_hse {
+	status = "disabled";
+};
+
+&pll {
+	status = "disabled";
+};
+
+&plli2s {
+	status = "disabled";
+};
+
+&rcc {
+	clocks = <&clk_hsi>;
+	clock-frequency = <DT_FREQ_M(16)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
+&usart2 {
+	current-speed = <115200>;
+	pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* The application owns these pins; don't reserve them for PWM/input. */
+&timers2 {
+	status = "disabled";
+};
+
+&timers4 {
+	status = "disabled";
+};
+
+&{/gpio_keys} {
+	status = "disabled";
+};

@@ -1,0 +1,358 @@
+/* ─────────────────────────────────────────────────────────────
+   Arduino Uno virtual board — all rules scoped to .uno-board
+   Uses global CSS tokens: --surface, --accent, --border,
+   --muted, --text, --surface-raised, --accent-soft, --code-font
+   ───────────────────────────────────────────────────────────── */
+
+/* ── PCB body ───────────────────────────────────────────────── */
+.uno-board {
+  position: relative;
+  /* Landscape: wider than tall, reflecting actual Uno R3 proportions */
+  width: 268px;
+  height: 183px;
+  /* Arduino teal — visually distinct from Pico forest-green */
+  background: #006b73;
+  border: 1px solid #004d54;
+  /* Uno has a distinctive beveled corner at bottom-left */
+  border-radius: 4px 4px 4px 20px;
+  color: #c2ecec;
+  box-shadow: 0 5px 9px rgba(23, 43, 32, 0.16);
+  font-family: var(--code-font);
+  flex-shrink: 0;
+}
+
+/* ── USB-B connector — protrudes from left edge ─────────────── */
+.uno-usb-b {
+  position: absolute;
+  left: -16px;
+  top: 22px;
+  width: 20px;
+  height: 26px;
+  background: #b8c4c8;
+  border: 1px solid #8898a4;
+  border-radius: 2px 0 0 2px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uno-usb-b > span {
+  display: block;
+  width: 11px;
+  height: 15px;
+  background: #3a484e;
+  border: 1px solid #5a6a72;
+  border-radius: 1px;
+}
+
+/* ── DC barrel jack — protrudes lower-left ─────────────────── */
+.uno-barrel {
+  position: absolute;
+  left: -12px;
+  bottom: 22px;
+  width: 16px;
+  height: 20px;
+  background: #2a2a2a;
+  border: 1.5px solid #484848;
+  border-radius: 8px 0 0 8px;
+}
+
+.uno-barrel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  background: #111;
+  border-radius: 50%;
+  border: 1px solid #555;
+}
+
+/* ── Pin columns (shared by digital and analog headers) ─────── */
+.uno-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font: inherit;
+  font-size: 4px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #c2ecec;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.uno-pin:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
+/* Reverse for bottom-edge pins: label inside board, pin extrudes down */
+.uno-pin-bottom {
+  flex-direction: column;   /* span first = inside board, i second = extrudes down */
+}
+
+.uno-pin i {
+  display: block;
+  width: 8px;
+  height: 9px;
+  background: #bdab65;
+  border: 1.5px solid #dacb8b;
+  border-radius: 1px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.uno-pin i::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 0.5px;
+  background: #1e3828;
+}
+
+/* Highlighted pin (D2 = button, D13 = LED) — static hint, independent of wiring state */
+.uno-pin-hi {
+  color: #ffe97a;
+}
+
+.uno-pin-hi i {
+  border-color: #ffe97a;
+}
+
+/* Wiring state — only these pins carry real simulator data (see LIVE_PIN_INDEX) */
+.uno-pin.is-pending i { box-shadow: 0 0 0 1.5px var(--accent); }
+.uno-pin.is-wired i { box-shadow: 0 0 0 1.5px var(--accent); }
+.uno-pin.is-live-high i::after { background: #2fb344; box-shadow: 0 0 3px 1px rgba(47, 179, 68, .9); }
+
+/* Pin groups are just flex rows; gap between the two 8-pin sockets */
+.uno-pin-group {
+  display: flex;
+  gap: 2px;
+}
+
+/* Physical gap between the two header sockets */
+.uno-pin-gap {
+  width: 5px;
+  flex-shrink: 0;
+}
+
+/* ── Digital pin header — top edge ──────────────────────────── */
+.uno-digital-header {
+  position: absolute;
+  top: -9px;            /* gold pins extrude above board top edge */
+  right: 5px;
+  display: flex;
+  align-items: flex-end;  /* align groups to bottom so labels are flush inside */
+  gap: 0;
+}
+
+/* ── Analog/power pin header — bottom edge ──────────────────── */
+.uno-analog-header {
+  position: absolute;
+  bottom: -9px;         /* gold pins extrude below board bottom edge */
+  left: 44px;           /* clear USB-B and barrel jack */
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+/* ── Board core ──────────────────────────────────────────────── */
+.uno-core {
+  position: absolute;
+  inset: 10px 8px 12px 20px;
+}
+
+/* ── USB-to-serial chip (ATmega16U2) ─────────────────────────── */
+.uno-usb-chip {
+  position: absolute;
+  top: 12px;
+  left: 2px;
+  width: 30px;
+  height: 22px;
+  background: #161c1e;
+  border: 1.5px solid #3a4e52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uno-usb-chip span {
+  font-size: 5.5px;
+  color: #86b8b8;
+}
+
+/* ── Status LEDs: ON, L, TX, RX ────────────────────────────── */
+.uno-sled-col {
+  position: absolute;
+  top: 8px;
+  left: 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uno-sled {
+  display: block;
+  width: 6px;
+  height: 4px;
+  border-radius: 1px;
+  background: #1a2e2e;
+  border: 0.5px solid #2a4848;
+  flex-shrink: 0;
+}
+
+/* Power LED — always on */
+.uno-sled-on {
+  background: #1aaa1a;
+  box-shadow: 0 0 5px rgba(26, 170, 26, 0.65);
+}
+
+/* L LED — mirrors pin 13 state */
+.uno-sled-l        { background: #1a2020; }
+.uno-sled-l.lit    { background: #f89820; box-shadow: 0 0 5px rgba(248, 152, 32, 0.7); }
+
+/* TX / RX LEDs — static off in simulator */
+.uno-sled-tx { background: #1a2020; }
+.uno-sled-rx { background: #1a2020; }
+
+/* Labels alongside the LED strip */
+.uno-sled-labels {
+  position: absolute;
+  top: 8px;
+  left: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 3.5px;
+  color: #c2ecec;
+}
+
+.uno-sled-labels span {
+  height: 4px;
+  display: flex;
+  align-items: center;
+}
+
+/* ── ATmega328P DIP package ──────────────────────────────────── */
+.uno-atmega {
+  position: absolute;
+  top: 50%;
+  right: 22px;
+  transform: translateY(-52%);
+  width: 85px;
+  height: 50px;
+  background: #141818;
+  border: 2px solid #48585c;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.uno-atmega span {
+  font-size: 6.5px;
+  color: #a0baba;
+  letter-spacing: 0.2px;
+}
+
+.uno-atmega small {
+  font-size: 4px;
+  color: #6a8888;
+}
+
+/* ── Crystal oscillator ──────────────────────────────────────── */
+.uno-crystal {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 20px;
+  background: #c8c0a4;
+  border: 1px solid #a8a088;
+  border-radius: 2px;
+}
+
+/* ── Reset tact button ───────────────────────────────────────── */
+.uno-reset-btn {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  width: 13px;
+  height: 13px;
+  background: #c4d0c0;
+  border: 2px solid #a4b0a0;
+  border-radius: 50%;
+}
+
+.uno-reset-btn::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: #e4e8e0;
+}
+
+/* ── Board brand text ────────────────────────────────────────── */
+.uno-brand {
+  position: absolute;
+  bottom: 14px;
+  left: 2px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #c2ecec;
+}
+
+.uno-brand-name {
+  font-size: 6px;
+  letter-spacing: 0.3px;
+}
+
+.uno-brand strong {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  font-family: inherit;
+}
+
+.uno-brand-rev {
+  font-size: 5px;
+  color: #88c0c0;
+  margin-top: -1px;
+}
+
+/* ── Silkscreen annotation ───────────────────────────────────── */
+.uno-silkscreen {
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  font-size: 4px;
+  color: #7ab8b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Responsive scaling ──────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .uno-board {
+    transform: scale(0.92);
+    transform-origin: center;
+    margin: 0 -10px;
+  }
+}
+
+@media (max-width: 440px) {
+  .uno-board {
+    transform: scale(0.78);
+    margin: 0 -28px;
+  }
+}

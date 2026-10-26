@@ -1,0 +1,227 @@
+.stm32-board-panel,
+.stm32-inspector {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.stm32-board-heading,
+.stm32-inspector-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem 0;
+}
+
+.stm32-board-heading h2,
+.stm32-inspector-heading h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.stm32-board-heading p,
+.stm32-inspector-heading p {
+  max-width: 65ch;
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.stm32-state {
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  text-transform: capitalize;
+}
+
+.stm32-state.is-running { color: var(--accent); }
+.stm32-state.is-error { color: var(--danger); }
+
+.stm32-board-stage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1.75rem;
+  margin: 1rem 1.25rem 0;
+  padding: 1.5rem 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+
+.stm32-header { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; flex: 0 0 auto; max-height: 12.5rem; overflow-y: auto; padding: 0.15rem; }
+.stm32-header-label { position: sticky; top: 0; z-index: 1; width: 100%; text-align: center; padding: 0.1rem 0; background: var(--surface-raised); font-size: 0.5625rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.15rem; }
+.stm32-header-pin { display: flex; align-items: center; gap: 0.3rem; background: none; border: 0; padding: 0.15rem 0.3rem; font: 0.5625rem var(--code-font); color: var(--muted); cursor: pointer; border-radius: 3px; }
+.stm32-header-pin:hover { background: var(--surface); }
+.stm32-header-pin:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.stm32-header-pin i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #5a6a72; border: 1px solid #8898a4; flex-shrink: 0; }
+.stm32-header-pin.is-pending i, .stm32-header-pin.is-wired i { box-shadow: 0 0 0 1.5px var(--accent); }
+.stm32-header-pin.is-live-high i { background: #2fb344; box-shadow: 0 0 4px 1px rgba(47, 179, 68, .8); }
+
+.stm32-pcb {
+  position: relative;
+  flex: 0 0 11.25rem;
+  width: 11.25rem;
+  border: 1px solid #115d3b;
+  border-radius: 4px;
+  color: #edf8ee;
+  background: #20764f;
+  box-shadow: 0 5px 9px #172b2020;
+  text-align: center;
+}
+
+.stm32-pcb::before,
+.stm32-pcb::after {
+  content: '';
+  position: absolute;
+  top: 7.125rem;
+  bottom: 1rem;
+  width: 0.4rem;
+  border: 1px solid #bdab65;
+  background: repeating-linear-gradient(to bottom, #34483d 0 5px, #d3bd75 5px 8px);
+}
+
+.stm32-pcb::before { left: 0.375rem; }
+.stm32-pcb::after { right: 0.375rem; }
+
+.stm32-stlink {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.75rem 0.5rem 0.75rem;
+  border-bottom: 1px dashed #a1c2ab;
+}
+
+.stm32-stlink strong { font-size: 0.6875rem; font-weight: 600; }
+.stm32-stlink small { font-size: 0.5rem; }
+
+.stm32-usb {
+  position: absolute;
+  top: -0.4rem;
+  width: 2.25rem;
+  height: 1.375rem;
+  border: 3px solid #bac4ca;
+  border-radius: 2px;
+  background: #4e5b61;
+}
+
+.stm32-target { display: flex; flex-direction: column; align-items: center; padding: 0.875rem 1.25rem 0.75rem; }
+.stm32-board-brand { font-size: 0.625rem; line-height: 1.65; }
+.stm32-board-brand strong { font-weight: 600; letter-spacing: 0.03em; }
+.stm32-chip { display: flex; flex-direction: column; justify-content: center; width: 5.125rem; height: 4.75rem; margin: 0.875rem 0; border: 4px solid #a0b2a4; background: #252b2c; }
+.stm32-chip strong { font: 0.5625rem var(--code-font); }
+.stm32-chip span { margin-top: 0.25rem; font-size: 0.5rem; }
+.stm32-pcb-leds { display: flex; justify-content: center; gap: 1rem; }
+.stm32-pcb-leds > span { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font: 0.5rem var(--code-font); }
+.stm32-pcb-leds .stm32-led { width: 0.625rem; height: 0.625rem; border-width: 1px; }
+.stm32-pcb-button { width: 1.125rem; height: 1.125rem; margin-top: 0.875rem; border: 3px solid #a9bbc5; border-radius: 50%; background: #395975; }
+.stm32-target > small { margin-top: 0.35rem; font: 0.5rem var(--code-font); }
+
+.stm32-instruments { display: flex; flex-direction: column; flex: 0 1 10rem; gap: 1.25rem; }
+.stm32-reading h3 { margin: 0 0 0.5rem; font-size: 0.75rem; font-weight: 600; }
+.stm32-reading > div { display: flex; align-items: center; gap: 0.625rem; }
+.stm32-reading output { font: 0.6875rem var(--code-font); }
+.stm32-reading p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.625rem; line-height: 1.6; }
+.stm32-reading code { font: inherit; font-family: var(--code-font); }
+.stm32-led { display: inline-block; flex: 0 0 auto; width: 1rem; height: 1rem; border: 3px solid var(--surface); border-radius: 50%; outline: 1px solid var(--border); background: #59655e; }
+.stm32-led-green.is-high { background: #9fc953; }
+.stm32-led-orange.is-high { background: #eab16c; }
+
+.stm32-hold-button,
+.stm32-debug-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.stm32-hold-button { touch-action: none; user-select: none; -webkit-user-select: none; }
+.stm32-hold-button > span { width: 0.875rem; height: 0.875rem; border: 3px solid var(--border); border-radius: 50%; background: var(--muted); }
+.stm32-hold-button.is-pressed { border-color: var(--accent); background: var(--surface-raised); }
+.stm32-hold-button.is-pressed > span { background: var(--accent); }
+.stm32-hold-button:hover:not(:disabled),
+.stm32-debug-controls button:hover:not(:disabled) { border-color: var(--accent); background: var(--surface-raised); }
+.stm32-hold-button:disabled,
+.stm32-debug-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+.stm32-board-panel :focus-visible,
+.stm32-inspector :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.stm32-reading .stm32-input-level { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.625rem; }
+
+.stm32-board-caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.3rem 1rem; margin: 0.75rem 1.5rem 0; color: var(--muted); font-size: 0.625rem; }
+.stm32-board-caption > span { flex: 1 1 13rem; }
+.stm32-board-caption output { font-family: var(--code-font); white-space: nowrap; }
+.stm32-board-note { margin: 0.75rem 1.5rem 1.25rem; color: var(--muted); font-size: 0.625rem; line-height: 1.7; max-width: 65ch; }
+
+.stm32-inspector { border-top: 1px solid var(--border); }
+.stm32-debug-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.stm32-inspector-status { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin: 0.875rem 1.5rem; color: var(--muted); font-size: 0.6875rem; }
+.stm32-inspector code { font-family: var(--code-font); }
+.stm32-inspector-error { margin: 0.875rem 1.5rem; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--danger); background: var(--surface-raised); overflow-wrap: anywhere; }
+.stm32-register-empty { padding: 0.5rem 1.5rem 1.5rem; }
+.stm32-register-empty h3,
+.stm32-register-section h3 { margin: 0; font-size: 0.75rem; font-weight: 600; }
+.stm32-register-empty p { margin: 0.5rem 0 0; max-width: 65ch; color: var(--muted); font-size: 0.6875rem; }
+.stm32-register-section { padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
+.stm32-register-section-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.stm32-register-section-heading > span,
+.stm32-register-help { color: var(--muted); font-size: 0.625rem; }
+.stm32-register-help { margin: 0.5rem 0 0.75rem; max-width: 65ch; line-height: 1.65; }
+.stm32-cpu-groups { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.75rem; }
+.stm32-cpu-group h4 { margin: 0 0 0.4rem; font-size: 0.625rem; font-weight: 500; color: var(--muted); }
+.stm32-cpu-registers { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.25rem, 1fr)); gap: 0.25rem 0.75rem; margin: 0; }
+.stm32-cpu-registers > div { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0.35rem; border-radius: var(--radius-sm); }
+.stm32-cpu-registers dt { font: 0.6875rem var(--code-font); color: var(--muted); }
+.stm32-cpu-registers dd { position: relative; margin: 0; padding-right: 0.5rem; font-size: 0.6875rem; white-space: nowrap; }
+.stm32-register-changed { background: var(--surface-raised); }
+.stm32-register-changed code { color: var(--accent); }
+.stm32-change-marker { display: inline-block; margin-left: 0.2rem; color: var(--accent); font-weight: 700; }
+.stm32-cpu-registers .stm32-change-marker { position: absolute; right: -0.1rem; }
+.stm32-register-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.stm32-register-table { width: 100%; border-collapse: collapse; font-size: 0.625rem; text-align: left; }
+.stm32-register-table th,
+.stm32-register-table td { padding: 0.5rem 0.625rem; vertical-align: top; white-space: nowrap; }
+.stm32-register-table thead { background: var(--surface-raised); color: var(--muted); }
+.stm32-register-table thead th { font-weight: 500; }
+.stm32-register-table tbody tr + tr { border-top: 1px solid var(--border); }
+.stm32-register-table th[scope='row'] { font-weight: 500; }
+.stm32-register-table td:last-child { font-variant-numeric: tabular-nums; }
+.stm32-decoded-fields { display: block; margin-top: 0.4rem; color: var(--muted); font: 0.5625rem/1.8 var(--code-font); }
+.stm32-disassembly { max-height: 16rem; margin: 0; padding: 0.75rem; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); background: var(--surface-raised); font: 0.6875rem/1.8 var(--code-font); white-space: pre; tab-size: 4; }
+.stm32-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+@media (max-width: 520px) {
+  .stm32-board-heading,
+  .stm32-inspector-heading { padding: 1rem 1rem 0; }
+  .stm32-board-stage { margin: 1rem 0.75rem 0; gap: 1.5rem 1rem; }
+  .stm32-instruments { flex-basis: 9rem; }
+  .stm32-board-caption { margin-inline: 1rem; }
+  .stm32-board-note { margin: 0.75rem 1rem 1rem; }
+  .stm32-inspector-status,
+  .stm32-inspector-error { margin-inline: 1rem; }
+  .stm32-register-empty { padding: 0.5rem 1rem 1rem; }
+  .stm32-register-section { padding: 1rem; }
+}
+
+@media (forced-colors: active) {
+  .stm32-pcb,
+  .stm32-led,
+  .stm32-chip,
+  .stm32-hold-button > span { border: 1px solid CanvasText; }
+  .stm32-register-changed { outline: 1px solid Highlight; }
+}

@@ -1,0 +1,25 @@
+// STM32F407VG Discovery subset: HSI 16 MHz, 1 MiB flash, 128 KiB main SRAM.
+// Stock Renode timer peripheral frequencies are not a silicon clock-tree proof.
+using "platforms/cpus/stm32f4.repl"
+
+flash:
+    size: 0x100000
+
+sram:
+    size: 0x20000
+
+nvic:
+    systickFrequency: 16000000
+
+UserButton: Miscellaneous.Button @ gpioPortA
+    -> gpioPortA@0
+
+UserLED: Miscellaneous.LED @ gpioPortD
+
+gpioPortD:
+    12 -> UserLED@0
+
+ButtonLED: Miscellaneous.LED @ gpioPortD
+
+gpioPortD:
+    13 -> ButtonLED@0

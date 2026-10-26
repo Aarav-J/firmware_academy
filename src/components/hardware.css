@@ -1,0 +1,72 @@
+.hw-panel {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.hw-panel section { padding: 1.125rem; }
+.hw-panel section + section { border-top: 1px solid var(--border); }
+.hw-section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.hw-panel h3 { margin: 0; font: inherit; font-size: 0.9375rem; font-weight: 650; color: var(--text); }
+.hw-section-heading p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.75rem; }
+.hw-panel .hw-help { color: var(--muted); margin: 0.75rem 0; }
+.hw-help strong { color: var(--text); font-weight: 550; }
+.hw-artifact-note { margin: 0.75rem 0; color: var(--muted); font-size: 0.75rem; }
+.hw-flash-steps { margin: 0.85rem 0; padding-left: 1.25rem; }
+.hw-flash-steps li { padding-left: 0.2rem; margin: 0.45rem 0; }
+.hw-panel code { font-size: 0.95em; }
+.hw-recovery { color: var(--muted); font-size: 0.75rem; }
+.hw-recovery summary { cursor: pointer; color: var(--text); padding: 0.25rem 0; }
+.hw-recovery p { margin: 0.45rem 0 0; }
+
+.hw-panel button,
+.hw-download,
+.hw-panel input:not([type='checkbox']),
+.hw-panel select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--surface-raised);
+  min-height: 2.125rem;
+}
+.hw-panel button, .hw-download { padding: 0.4rem 0.75rem; white-space: nowrap; cursor: pointer; }
+.hw-panel button:hover:not(:disabled), .hw-download:hover:not([aria-disabled='true']) { border-color: var(--accent); }
+.hw-panel button:disabled, .hw-panel input:disabled, .hw-panel select:disabled, .hw-download[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
+.hw-download { display: inline-flex; align-items: center; text-decoration: none; color: var(--accent); }
+.hw-download[aria-disabled='true'] { pointer-events: none; }
+.hw-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hw-panel select { padding: 0.4rem 1.5rem 0.4rem 0.5rem; }
+.hw-panel input:not([type='checkbox']) { min-width: 0; width: 100%; padding: 0.4rem 0.625rem; }
+.hw-panel input::placeholder { color: var(--muted); opacity: 1; }
+.hw-serial-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.625rem; margin-top: 1rem; }
+.hw-field { display: grid; gap: 0.25rem; font-size: 0.6875rem; color: var(--muted); }
+.hw-follow { display: inline-flex; align-items: center; align-self: flex-end; gap: 0.35rem; min-height: 2.125rem; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
+.hw-follow input { accent-color: var(--accent); }
+.hw-connection-state { white-space: nowrap; color: var(--muted); font-size: 0.6875rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.15rem 0.4rem; }
+.hw-connection-state.is-connected { color: var(--accent); }
+.hw-port-description { color: var(--muted); margin: 0.65rem 0 0.5rem; font-size: 0.75rem; }
+.hw-warning, .hw-error { padding: 0.65rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+.hw-error { color: var(--danger); overflow-wrap: anywhere; }
+.hw-warning { color: var(--text); }
+.hw-monitor { box-sizing: border-box; margin: 0; padding: 0.75rem; min-height: 11rem; max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-md); font: 0.75rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
+.hw-monitor-empty { color: var(--muted); }
+.hw-monitor-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.75rem; color: var(--muted); font-size: 0.625rem; margin-top: 0.35rem; }
+.hw-send { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+.hw-message-field { flex: 1; min-width: 0; }
+.hw-ending-field { min-width: 0; }
+.hw-ending-field select { max-width: 100%; }
+.hw-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+@media (max-width: 520px) {
+  .hw-panel section { padding: 0.875rem; }
+  .hw-section-heading { flex-wrap: wrap; gap: 0.75rem; }
+  .hw-follow { margin-left: 0; }
+  .hw-clear { margin-left: auto; }
+  .hw-send { flex-wrap: wrap; }
+  .hw-message-field { flex-basis: 100%; }
+  .hw-ending-field { flex: 1; }
+  .hw-ending-field select { width: 100%; }
+}

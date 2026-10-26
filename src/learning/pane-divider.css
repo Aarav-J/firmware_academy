@@ -1,0 +1,63 @@
+.academy-pane-divider {
+  position: relative;
+  align-self: stretch;
+  width: 7px;
+  min-width: 7px;
+  min-height: 0;
+  background: var(--surface-raised);
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.academy-pane-divider::before,
+.academy-pane-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.academy-pane-divider::before {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.academy-pane-divider::after {
+  top: 50%;
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  background: var(--muted);
+}
+
+.academy-pane-divider:hover,
+.academy-pane-divider:focus-visible {
+  background: var(--accent-soft);
+}
+
+.academy-pane-divider:hover::after,
+.academy-pane-divider:focus-visible::after {
+  background: var(--accent);
+}
+
+.academy-pane-divider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.exercise-pane-code .academy-pane-divider,
+.exercise-pane-hardware .academy-pane-divider {
+  display: none;
+}
+
+@media (max-width: 1150px) {
+  .academy-pane-divider {
+    display: none;
+  }
+}

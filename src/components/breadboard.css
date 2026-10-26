@@ -1,0 +1,131 @@
+/* Physical bench: app chrome recedes; the objects and real sockets lead. */
+.physical-bench { --bench-label: #47534e; --bench-board-shadow: #bec4bb; position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); overflow: hidden; font-size: 13px; line-height: 1.4; }
+:root[data-theme='dark'] .physical-bench { --bench-label: #c0cec7; --bench-board-shadow: #111c1a; }
+.physical-bench *, .physical-bench *::before, .physical-bench *::after { box-sizing: border-box; }
+.physical-bench button, .physical-bench input, .physical-bench select { font: inherit; }
+.physical-bench button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; }
+.physical-bench button:hover:not(:disabled) { background: var(--surface-raised); border-color: var(--border); }
+.physical-bench button:disabled { opacity: .4; cursor: not-allowed; }
+.physical-bench button:focus-visible, .physical-bench input:focus-visible, .physical-bench select:focus-visible, .bench-scene:focus-visible, .bench-schematic [role='button']:focus-visible, .bench-footer summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.physical-bench button[aria-pressed='true'] { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+.bench-toolbar { min-height: 48px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 5px 9px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.bench-view-switch, .bench-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
+.bench-view-switch button { font-weight: 600; font-size: 12px; }
+.bench-tools button { white-space: nowrap; }
+.bench-scene-wrap { position: relative; min-width: 0; background: #e1e8e3; }
+:root[data-theme='dark'] .bench-scene-wrap { background: #26322f; }
+.bench-scene-wrap[hidden] { display: none; }
+.bench-scene { position: relative; height: clamp(400px, 58vh, 590px); width: 100%; min-width: 0; overflow: hidden; touch-action: none; outline-offset: -3px; cursor: crosshair; }
+.bench-scene.is-pan { cursor: grab; }
+.bench-scene.is-pan:active { cursor: grabbing; }
+.bench-world { display: block; position: absolute; inset: 0; overflow: hidden; user-select: none; }
+.bench-object-title { fill: var(--bench-label); font-size: 21px; font-weight: 600; letter-spacing: -.3px; }
+.bench-object-caption { fill: var(--bench-label); font-size: 14px; }
+.bench-part-label { fill: #354a40; font-size: 15px; font-weight: 600; paint-order: stroke; stroke: #eeeae0; stroke-width: 4px; stroke-linejoin: round; }
+.bench-lead-label { fill: #40554b; font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #eeeae0; stroke-width: 3px; }
+.bench-part-art { cursor: grab; }
+.bench-part-art:active { cursor: grabbing; }
+.bench-socket-rim { fill: #cdcbbd; stroke: #9a9f94; stroke-width: .9; }
+.bench-board-art ~ .bench-endpoint .bench-socket-rim { fill: #c9b66d; }
+.bench-socket-core { fill: #5b625b; }
+.bench-endpoint { cursor: crosshair; }
+.bench-pin-hit { fill: transparent; stroke: none; }
+.bench-endpoint:hover .bench-socket-rim, .bench-endpoint.is-net .bench-socket-rim { fill: #e3f5e9; stroke: #287855; stroke-width: 2; }
+.bench-endpoint.is-pending .bench-socket-rim { fill: #55c5b1; stroke: #135c52; stroke-width: 3; }
+.bench-endpoint.is-occupied .bench-socket-core { fill: #34433a; }
+.bench-endpoint.is-high .bench-socket-core { fill: #a3efd5; stroke: #145d46; stroke-width: 1.2; }
+.bench-pin-locator { fill: #e8f4bc; stroke: #536f16; stroke-width: 2.5; }
+.bench-jumper { cursor: pointer; }
+.bench-wire-hit { fill: none; stroke: transparent; stroke-width: 18; stroke-linecap: round; stroke-linejoin: round; pointer-events: stroke; }
+.bench-wire-outline { fill: none; stroke: #38483d; stroke-opacity: .27; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.bench-wire-color { fill: none; stroke-width: 4.3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.bench-jumper.is-selected .bench-wire-outline { stroke: #fff4b5; stroke-opacity: 1; stroke-width: 11; }
+.bench-jumper:hover .bench-wire-outline { stroke-opacity: .65; }
+.bench-wire-preview { fill: none; stroke-width: 4; stroke-dasharray: 7 5; stroke-linecap: round; pointer-events: none; }
+.bench-hud { position: absolute; bottom: 15px; right: 15px; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 3px 9px rgba(12, 35, 23, .12); }
+.bench-hud button { min-height: 36px; min-width: 34px; padding-inline: 7px; }
+.bench-hud-divider { height: 20px; width: 1px; background: var(--border); margin-inline: 3px; }
+.bench-zoom-value { font-variant-numeric: tabular-nums; min-width: 48px !important; }
+.bench-hover-label { position: absolute; bottom: 67px; left: 14px; max-width: calc(100% - 28px); padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 12px; pointer-events: none; }
+.bench-hover-label span { color: var(--muted); }
+.bench-status { min-height: 45px; display: flex; align-items: center; flex-wrap: wrap; gap: 7px 12px; padding: 9px 13px; border-top: 1px solid var(--border); font-size: 12px; }
+.bench-status > span { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.bench-status-active { font-weight: 600; }
+.physical-bench .bench-connect-here { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.bench-safety-warning { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--danger); font-size: 13px; }
+.bench-safety-warning p { margin: 3px 0; }
+.bench-wire-palette { display: flex; gap: 5px; align-items: center; }
+.physical-bench .bench-wire-palette button { min-height: 24px; min-width: 24px; width: 24px; height: 24px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; outline: 1px solid var(--border); }
+.physical-bench .bench-wire-palette button[aria-pressed='true'] { outline: 2px solid var(--text); outline-offset: 1px; }
+.bench-finder { position: absolute; z-index: 6; top: 50px; right: 10px; width: min(320px, calc(100% - 20px)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 6px 24px rgba(12, 35, 23, .2); padding: 13px; }
+.bench-finder > div:first-child { display: flex; align-items: center; justify-content: space-between; }
+.bench-finder input { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-sunken); color: var(--text); margin-top: 5px; }
+.bench-finder p { margin: 8px 0; color: var(--muted); font-size: 12px; }
+.bench-finder-results { max-height: min(310px, 45vh); overflow-y: auto; overscroll-behavior: contain; }
+.bench-finder-results button { width: 100%; min-height: 44px; justify-content: space-between; text-align: left; border-radius: 0; border-bottom: 1px solid var(--border); }
+.bench-finder-results button span { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+.bench-parts-bin { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); background: var(--surface-raised); }
+.bench-parts-bin button { flex-direction: column; min-width: 90px; border: 1px solid var(--border); background: var(--surface); min-height: 75px; font-size: 12px; }
+.bench-parts-bin svg { width: 64px; height: 30px; }
+.bench-module-preview { display: block; width: 38px; height: 24px; background: #28625b; border: 3px solid #204c47; border-radius: 2px; }
+.bench-inspector { padding: 12px 14px; border-top: 1px solid var(--border); background: var(--surface-raised); }
+.bench-inspector-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bench-inspector-heading strong { font-size: 14px; }
+.bench-inspector-heading strong span { color: var(--muted); font-weight: 400; margin-left: 8px; }
+.bench-inspector-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 10px 14px; margin-top: 5px; }
+.bench-inspector-fields label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.bench-inspector select { width: 145px; min-height: 38px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.bench-inspector-fields > button, .bench-jumper-inspector > button { min-height: 38px; border-color: var(--border); background: var(--surface); }
+.physical-bench .bench-remove { color: var(--danger); }
+.bench-inspector > p { font-size: 12px; color: var(--muted); max-width: 100ch; margin: 12px 0 0; }
+.bench-jumper-inspector { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bench-jumper-inspector > span { flex: 1 1 240px; overflow-wrap: anywhere; }
+.bench-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 15px; padding: 9px 13px; border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 11px; }
+.bench-footer details { position: relative; }
+.bench-footer summary { cursor: pointer; padding: 6px 0; color: var(--text); }
+.bench-footer details p { max-width: 70ch; font-size: 13px; line-height: 1.65; color: var(--text); margin: 10px 0; }
+.physical-bench.bench-expanded { position: fixed; inset: 12px; width: auto; height: auto; z-index: 1000; box-shadow: 0 14px 50px rgba(0, 0, 0, .3); overflow-y: auto; }
+.bench-expanded .bench-scene-wrap { flex: 1; min-height: 360px; }
+.bench-expanded .bench-scene { height: 100%; min-height: 360px; }
+.bench-expanded .bench-footer { flex-shrink: 0; }
+.bench-schematic { min-height: 400px; padding: 22px; background: var(--surface-sunken); overflow: auto; }
+.bench-schematic-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; }
+.bench-schematic-heading strong { font-size: 16px; }
+.bench-schematic-heading span { color: var(--muted); font-size: 13px; }
+.bench-schematic svg { display: block; width: 100%; min-width: 640px; }
+.bench-schematic text { fill: var(--text); font-size: 16px; }
+.bench-schematic .bench-schematic-label { fill: var(--muted); font-size: 14px; }
+.bench-schematic-edge { fill: none; stroke: var(--muted); stroke-width: 3; }
+.bench-schematic-symbol { fill: var(--surface); stroke: var(--text); stroke-width: 2; }
+.bench-schematic-part { cursor: pointer; }
+.bench-schematic-part.is-selected .bench-schematic-symbol { stroke: var(--accent); stroke-width: 4; }
+.bench-schematic-net circle { fill: var(--text); }
+.bench-schematic-net.is-selected circle { fill: var(--accent); r: 12px; }
+.bench-schematic-wires { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.bench-schematic-wires button { justify-content: flex-start; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; min-height: 40px; }
+.bench-schematic-wires button > span { width: 18px; height: 4px; flex-shrink: 0; border-radius: 2px; }
+.bench-schematic-note { font-size: 12px; color: var(--muted); margin: 18px 0 0; }
+@media (max-width: 760px) {
+  .bench-toolbar { gap: 4px; }
+  .bench-tools { margin-left: auto; }
+  .bench-tools button { min-height: 40px; }
+  .bench-view-switch button { min-height: 40px; font-size: 12px; }
+  .bench-scene { height: 430px; }
+  .bench-inspector-fields { gap: 10px; }
+  .bench-inspector select { width: 130px; min-height: 44px; }
+  .bench-status { padding-inline: 10px; }
+  .physical-bench .bench-wire-palette button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; }
+  .bench-finder { top: 92px; }
+  .bench-expanded .bench-scene { min-height: 300px; }
+}
+@media (max-width: 440px) {
+  .bench-toolbar { padding: 4px 6px; }
+  .bench-tools { width: 100%; justify-content: space-between; }
+  .bench-view-switch { width: 100%; }
+  .bench-view-switch button { flex: 1; }
+  .bench-hud { right: 8px; bottom: 10px; gap: 0; padding: 3px; }
+  .bench-hud button { min-width: 30px; padding-inline: 5px; }
+  .bench-hover-label { left: 8px; bottom: 64px; }
+  .physical-bench.bench-expanded { inset: 5px; }
+}
+@media (prefers-reduced-motion: reduce) { .physical-bench *, .physical-bench *::before, .physical-bench *::after { transition: none !important; animation: none !important; } }
