@@ -4,17 +4,18 @@ import { readFile, rm } from 'node:fs/promises';
 import { compileArduino } from '../server/stm32-build/arduino';
 import { projectTempDirectory } from '../server/stm32-build/storage';
 import { assessExercise } from '../src/learning/assessment';
-import { ATmega328PSimulation, parseIntelHex } from '../src/simulator/avr-engine';
+import { ATmega328PSimulation, createEepromBackend, parseIntelHex } from '../src/simulator/avr-engine';
 import { appendSerial, retainPinTrace } from '../src/trace';
+import type { EEPROMBackend } from 'avr8js';
 import type { TraceEvent } from '../src/contracts';
 import type { ExerciseStep, WorkbenchObservation } from '../src/learning/types';
 
-async function compile(source: string): Promise<ATmega328PSimulation> {
+async function compile(source: string, eepromBackend?: EEPROMBackend): Promise<ATmega328PSimulation> {
   const directory = await projectTempDirectory('request');
   try {
     const { hexPath } = await compileArduino(directory, source);
     const hex = await readFile(hexPath, 'utf8');
-    return new ATmega328PSimulation(parseIntelHex(hex));
+    return new ATmega328PSimulation(parseIntelHex(hex), eepromBackend);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -36,7 +37,7 @@ function observe(sim: ATmega328PSimulation, targetUs: number, actions: Action[] 
     if (output) serial = appendSerial(serial, output);
   }
   assert.ok(frame.timeUs >= targetUs, `simulation stalled at ${frame.timeUs} before ${targetUs}`);
-  return { built: true, state: 'paused', timeUs: frame.timeUs, pins: frame.pins, trace, analogVoltage, serial };
+  return { built: true, state: 'paused', timeUs: frame.timeUs, pins: frame.pins, trace, analogVoltage, serial, eeprom: frame.eeprom };
 }
 
 function step(rule: ExerciseStep['goals'][number]['rule'], overrides: Partial<ExerciseStep> = {}): ExerciseStep {
@@ -219,4 +220,131 @@ void loop() {
   const blockedObs = observe(blockedSim, 1_200_000, actions, 3.3);
   const responsiveness = assessExercise(step('responsive-under-load', { goals: [{ id: 'responsive-under-load', label: 'Mode', rule: 'responsive-under-load', pin: 12 }] }), blockedObs)[0];
   assert.equal(responsiveness.passed, false, 'a 300 ms blocking delay() should make the mode toggle miss its 50 ms response window');
+});
+
+test('spi-identifies-device reads the real simulated sensor while selected, and rejects it deselected', async () => {
+  const sim = await compile(`#include <SPI.h>
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  pinMode(10, OUTPUT);
+  digitalWrite(10, HIGH);
+  digitalWrite(10, LOW);
+  SPI.transfer(0x80);
+  byte id = SPI.transfer(0x00);
+  digitalWrite(10, HIGH);
+  Serial.print("ID: 0x");
+  Serial.println(id, HEX);
+}
+void loop() {}
+`);
+  const obs = observe(sim, 200_000, []);
+  assert.equal(assessExercise(step('spi-identifies-device'), obs)[0].passed, true);
+});
+
+test('spi-handles-failure reports the deselected read explicitly and keeps the last valid reading', async () => {
+  const sim = await compile(`#include <SPI.h>
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  pinMode(10, OUTPUT);
+  digitalWrite(10, HIGH);
+
+  digitalWrite(10, LOW);
+  SPI.transfer(0x80);
+  byte id = SPI.transfer(0x00);
+  digitalWrite(10, HIGH);
+  Serial.print("ID: 0x");
+  Serial.println(id, HEX);
+
+  SPI.transfer(0x80);
+  byte bad = SPI.transfer(0x00);
+  if (bad != 0x71) {
+    Serial.println("Error: device not selected");
+  }
+}
+void loop() {}
+`);
+  const obs = observe(sim, 200_000, []);
+  assert.equal(assessExercise(step('spi-identifies-device'), obs)[0].passed, true);
+  assert.equal(assessExercise(step('spi-handles-failure'), obs)[0].passed, true);
+  const missingFailure = assessExercise(step('spi-handles-failure'), { ...obs, serial: 'ID: 0x71' })[0];
+  assert.equal(missingFailure.passed, false, 'reporting only the good reading must not satisfy the failure-handling goal');
+});
+
+test('eeprom-round-trip and eeprom-persists-value read the real simulated EEPROM backing store', async () => {
+  const readOnly = await compile(`#include <EEPROM.h>
+void setup() {
+  Serial.begin(9600);
+  byte stored = EEPROM.read(0);
+  Serial.print("Stored: ");
+  Serial.println(stored);
+}
+void loop() {}
+`);
+  const erased = observe(readOnly, 20_000, []);
+  assert.equal(erased.eeprom, 255, 'a fresh EEPROM backend must read as erased (0xFF)');
+  assert.equal(assessExercise(step('eeprom-round-trip'), erased)[0].passed, true, 'round-trip must match the real erased value');
+  assert.equal(assessExercise(step('eeprom-persists-value'), erased)[0].passed, false, 'an erased EEPROM must not satisfy the persistence goal');
+
+  const writer = await compile(`#include <EEPROM.h>
+const int ADDRESS = 0;
+void setup() {
+  Serial.begin(9600);
+  byte stored = EEPROM.read(ADDRESS);
+  if (stored == 255) {
+    stored = 7;
+    EEPROM.update(ADDRESS, stored);
+  }
+  Serial.print("Stored: ");
+  Serial.println(stored);
+}
+void loop() {}
+`);
+  const written = observe(writer, 60_000, []);
+  assert.equal(written.eeprom, 7, 'the real backing store must hold the written value once the conditional write completes');
+  assert.equal(assessExercise(step('eeprom-round-trip'), written)[0].passed, true);
+  assert.equal(assessExercise(step('eeprom-persists-value'), written)[0].passed, true);
+  const fakedPrint = assessExercise(step('eeprom-round-trip'), { ...written, serial: 'Stored: 7' })[0];
+  assert.equal(fakedPrint.passed, true, 'a report matching the real store value passes even when phrased differently');
+  const wrongPrint = assessExercise(step('eeprom-round-trip'), { ...written, serial: 'Stored: 42' })[0];
+  assert.equal(wrongPrint.passed, false, 'a printed value that does not match the real store must fail, even though it looks like a number');
+});
+
+test('EEPROM genuinely survives a simulated reset while an ordinary variable would not', async () => {
+  const source = `#include <EEPROM.h>
+const int ADDRESS = 0;
+void setup() {
+  Serial.begin(9600);
+  byte stored = EEPROM.read(ADDRESS);
+  if (stored == 255) {
+    stored = 7;
+    EEPROM.update(ADDRESS, stored);
+  }
+  Serial.print("Stored: ");
+  Serial.println(stored);
+}
+void loop() {}
+`;
+  const persistentBackend = createEepromBackend();
+  // Seed the backend directly, as a previous real boot would have — proves the conditional
+  // genuinely reads real prior state across a reconstruction, not a coincidental fixed value.
+  persistentBackend.writeMemory(0, 42);
+  const seededSim = await compile(source, persistentBackend);
+  const seededObs = observe(seededSim, 60_000, []);
+  assert.ok(seededObs.serial?.includes('Stored: 42'), 'a pre-existing non-erased value must be read back untouched, not overwritten with the first-boot default');
+  assert.equal(seededObs.eeprom, 42, 'the conditional write must be skipped once a real value is already stored');
+
+  // Reconstructing the simulation with the SAME backend (what the worker does on 'reset')
+  // models a real chip reset: SRAM-backed state is gone, but EEPROM survives untouched.
+  const secondBoot = await compile(source, persistentBackend);
+  const secondObs = observe(secondBoot, 60_000, []);
+  assert.ok(secondObs.serial?.includes('Stored: 42'), 'a second boot sharing the same backend must still see the earlier value');
+  assert.equal(secondObs.eeprom, 42);
+
+  // A genuinely fresh backend (a brand-new worker/page load) is independent of the one above.
+  const freshSim = await compile(source, createEepromBackend());
+  const freshObs = observe(freshSim, 60_000, []);
+  assert.ok(freshObs.serial?.includes('Stored: 7'), 'an unrelated fresh backend must take the first-boot branch and write its own default, unaffected by the other instance');
+  assert.equal(freshObs.eeprom, 7);
 });

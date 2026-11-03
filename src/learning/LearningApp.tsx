@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowCounterClockwise, ArrowLeft, ArrowRight, BookOpen, CaretDown, CheckCircle, Circuitry, Code, Lightbulb, List, Moon, Pause, Play, Sun, X } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, ArrowLeft, ArrowRight, BookOpen, CaretDown, CheckCircle, Code, Lightbulb, List, Moon, Pause, Play, Sun, X } from '@phosphor-icons/react';
 import { arduinoCourse } from './course';
 import { CourseTimeline } from './CourseTimeline';
 import { LessonContent } from './LessonContent';
@@ -125,6 +125,9 @@ export default function LearningApp() {
   const nextLesson = lesson ? lessons[lessons.indexOf(lesson) + 1] : undefined;
   const stepIndex = lesson && step ? lesson.steps.indexOf(step) : 0;
   const key = lesson && step ? stepKey(lesson.id, step.id) : '';
+  const unitIndex = unit ? arduinoCourse.units.indexOf(unit) : -1;
+  const lessonIndex = unit && lesson ? unit.lessons.indexOf(lesson) : -1;
+  const eyebrow = unitIndex >= 0 && lessonIndex >= 0 ? `UNIT ${unitIndex + 1} · LESSON ${lessonIndex + 1}` : '';
   const canContinue = step?.kind !== 'predict' || progress.predictions[key] === step.answerId;
   const themeButton = <button className="icon-button academy-theme" onClick={() => setDark(value => !value)} aria-label={`Switch to ${dark ? 'light' : 'dark'} theme`} title={`Switch to ${dark ? 'light' : 'dark'} theme`}>{dark ? <Sun size={19} /> : <Moon size={19} />}</button>;
 
@@ -133,7 +136,7 @@ export default function LearningApp() {
       <a className="academy-skip" href="#academy-content" onClick={event => { event.preventDefault(); const content = document.getElementById('academy-content'); content?.setAttribute('tabindex', '-1'); content?.focus(); }}>Skip to content</a>
       {lesson && step ? (
         <header className="academy-lesson-header">
-          <a className="academy-course-back" href="#/course" aria-label="Back to Arduino fundamentals"><ArrowLeft size={18} /><span>Arduino fundamentals</span></a>
+          <a className="academy-wordmark" href="#/course" aria-label="Back to Arduino fundamentals"><span className="academy-diamond" aria-hidden="true" /><strong>firmware<span>/academy</span></strong></a>
           <button ref={outlineButton} className="icon-button academy-outline-toggle" aria-label="Course outline" title="Course outline" aria-expanded={outlineOpen} aria-controls="academy-outline" onClick={() => setOutlineOpen(value => !value)}><List size={18} /></button>
           <strong className="academy-lesson-title" title={lesson.title}>{lesson.title}</strong>
           <CompactMenu key={key + String(complete)} className="academy-step-menu" label={<>{complete ? 'Complete' : kindLabels[step.kind]}<small>{complete ? lesson.steps.length : stepIndex + 1}/{lesson.steps.length}</small></>} accessibleLabel={`Lesson steps: ${complete ? 'Complete' : kindLabels[step.kind]}, ${complete ? lesson.steps.length : stepIndex + 1} of ${lesson.steps.length}`}>
@@ -143,7 +146,7 @@ export default function LearningApp() {
         </header>
       ) : (
         <header className="academy-header">
-          <a className="wordmark" href="#/course" aria-label="Firmware Academy courses"><Circuitry size={27} weight="duotone" /><strong>Firmware<span>Academy</span></strong></a>
+          <a className="academy-wordmark" href="#/course" aria-label="Firmware Academy courses"><span className="academy-diamond" aria-hidden="true" /><strong>firmware<span>/academy</span></strong></a>
           <nav aria-label="Main navigation" className="academy-navigation"><a href="#/course" aria-current={route.view !== 'workbench' ? 'page' : undefined}><BookOpen size={17} />Learn</a><a href="#/workbench" aria-current={route.view === 'workbench' ? 'page' : undefined}><Code size={17} />Workbench</a></nav>
           {themeButton}
         </header>
@@ -155,8 +158,8 @@ export default function LearningApp() {
         {outlineOpen && <nav ref={outlineRef} id="academy-outline" className="academy-outline" aria-label="Lesson outline"><div><strong>{unit?.title}</strong><button className="icon-button" aria-label="Close course outline" onClick={() => { setOutlineOpen(false); outlineButton.current?.focus(); }}><X size={18} /></button></div>{unit?.lessons.map(item => <div className="academy-outline-lesson" key={item.id}><button onClick={() => openLesson(item.id)} aria-current={item.id === lesson.id ? 'page' : undefined}>{lessonComplete(item, progress) ? <CheckCircle size={18} /> : <BookOpen size={18} />}{item.title}</button>{item.id === lesson.id && item.steps.map(part => <button className="academy-outline-step" key={part.id} onClick={() => go(`#/learn/${item.id}/${part.id}`)} aria-current={part.id === step.id && !complete ? 'step' : undefined}>{progress.completedSteps.includes(stepKey(item.id, part.id)) ? <CheckCircle size={14} /> : <span className="academy-step-dot" />}{part.title}</button>)}</div>)}<a href="#/course">View full course roadmap <ArrowRight size={16} /></a><a href="#/workbench">Open free workbench <Code size={16} /></a></nav>}
         {complete ? <main id="academy-content" className="academy-completion" ref={headingRef} tabIndex={-1}><CheckCircle size={52} weight="duotone" /><p>Lesson complete</p><h1>{lesson.title}</h1><p>{lesson.description}</p><div className="academy-completion-summary"><strong>You worked through the whole loop.</strong><span>{lesson.steps.some(part => part.kind === 'exercise') ? 'Learned the concept, explored the model, made a prediction, and checked real firmware output.' : 'Learned the concept, explored the model, made a prediction, and checked your circuit and reasoning.'}</span></div><button className="primary-button" onClick={() => nextLesson ? openLesson(nextLesson.id) : go('#/course')}>{nextLesson ? `Next: ${nextLesson.title}` : 'Back to course'}<ArrowRight size={17} /></button><button className="text-button" onClick={() => go(`#/learn/${lesson.id}/${lesson.steps[0].id}`)}>Review this lesson</button></main>
           : step.kind === 'circuit' ? <main id="academy-content" className="academy-circuit-activity" ref={headingRef} tabIndex={-1}><CircuitActivity key={key} step={step} draft={progress.circuits?.[key] ?? decodeCircuitDraft(step.scenario, null)} onChange={draft => setProgress(previous => ({ ...previous, circuits: { ...previous.circuits, [key]: draft }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onComplete={finishStep} /></main>
-          : step.kind === 'exercise' ? <ExerciseView key={key} lesson={lesson} step={step} source={progress.drafts[key] ?? step.starterCode} circuit={step.hardware ? progress.circuits?.[key] ?? decodeCircuitDraft(step.hardware, null) : undefined} dark={dark} onSourceChange={source => setProgress(previous => ({ ...previous, drafts: { ...previous.drafts, [key]: source }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onCircuitChange={draft => setProgress(previous => ({ ...previous, circuits: { ...previous.circuits, [key]: draft }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onContinue={finishStep} onBack={() => go(`#/learn/${lesson.id}/${lesson.steps[stepIndex - 1].id}`)} />
-          : <><main id="academy-content" className={`academy-reader academy-reader-${step.kind}`} ref={headingRef} tabIndex={-1}><div className="academy-reading-context">{kindLabels[step.kind]}<span>{stepIndex + 1} of {lesson.steps.length}</span></div><LessonContent key={key} lesson={lesson} step={step} answer={progress.predictions[key]} onAnswer={answerPrediction} /></main><footer className="academy-step-footer"><button className="secondary-button" onClick={() => stepIndex ? go(`#/learn/${lesson.id}/${lesson.steps[stepIndex - 1].id}`) : go('#/course')}><ArrowLeft size={17} />{stepIndex ? 'Back' : 'Course overview'}</button><button className="primary-button" disabled={!canContinue} onClick={finishStep}>{lesson.steps[stepIndex + 1]?.kind === 'exercise' ? 'Try it in code' : lesson.steps[stepIndex + 1]?.kind === 'circuit' ? 'Try the circuit' : 'Continue'}<ArrowRight size={17} /></button></footer></>}
+          : step.kind === 'exercise' ? <ExerciseView key={key} lesson={lesson} step={step} eyebrow={eyebrow} source={progress.drafts[key] ?? step.starterCode} circuit={step.hardware ? progress.circuits?.[key] ?? decodeCircuitDraft(step.hardware, null) : undefined} dark={dark} onSourceChange={source => setProgress(previous => ({ ...previous, drafts: { ...previous.drafts, [key]: source }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onCircuitChange={draft => setProgress(previous => ({ ...previous, circuits: { ...previous.circuits, [key]: draft }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onContinue={finishStep} onBack={() => go(`#/learn/${lesson.id}/${lesson.steps[stepIndex - 1].id}`)} />
+          : <><main id="academy-content" className={`academy-reader academy-reader-${step.kind}`} ref={headingRef} tabIndex={-1}><div className="academy-reading-context"><span className="academy-eyebrow">{eyebrow}</span><span>{kindLabels[step.kind]} · {stepIndex + 1} of {lesson.steps.length}</span></div><LessonContent key={key} lesson={lesson} step={step} answer={progress.predictions[key]} onAnswer={answerPrediction} /></main><footer className="academy-step-footer"><button className="secondary-button" onClick={() => stepIndex ? go(`#/learn/${lesson.id}/${lesson.steps[stepIndex - 1].id}`) : go('#/course')}><ArrowLeft size={17} />{stepIndex ? 'Back' : 'Course overview'}</button><button className="primary-button" disabled={!canContinue} onClick={finishStep}>{lesson.steps[stepIndex + 1]?.kind === 'exercise' ? 'Try it in code' : lesson.steps[stepIndex + 1]?.kind === 'circuit' ? 'Try the circuit' : 'Continue'}<ArrowRight size={17} /></button></footer></>}
       </>}
     </div>
   );
@@ -190,9 +193,10 @@ function WorkspaceLoading() {
   return <div className="academy-workspace-loading" role="status"><div /><div /><p>Opening your firmware workspace…</p></div>;
 }
 
-function ExerciseView({ lesson, step, source, circuit, dark, onSourceChange, onCircuitChange, onContinue, onBack }: {
+function ExerciseView({ lesson, step, eyebrow, source, circuit, dark, onSourceChange, onCircuitChange, onContinue, onBack }: {
   lesson: Lesson;
   step: ExerciseStep;
+  eyebrow: string;
   source: string;
   circuit?: CircuitDraft;
   dark: boolean;
@@ -282,12 +286,13 @@ function ExerciseView({ lesson, step, source, circuit, dark, onSourceChange, onC
     <div id="academy-content" className={`academy-exercise-layout${instructions ? '' : ' instructions-hidden'} exercise-pane-${pane}`} style={{ '--editor-share': `${editorShare}%` } as CSSProperties}>
       <aside id="exercise-instructions" className="academy-exercise-instructions" hidden={!instructions} aria-label="Exercise instructions">
         <button className="text-button academy-back-explanation" onClick={onBack}><ArrowLeft size={14} />Back to explanation</button>
+        <p className="academy-eyebrow">{eyebrow} · BUILD</p>
         <h1 ref={heading} tabIndex={-1}>{step.title}</h1><p>{step.paragraphs[0]}</p>
         <details className="academy-api-reference"><summary>API reference & guidance</summary>{step.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</details>
         <h2>What to make happen</h2>
         <ul className="academy-goals">{step.goals.map(goal => {
           const result = results.find(item => item.id === goal.id);
-          return <li key={goal.id} className={result?.passed ? 'goal-passed' : ''}><CheckCircle size={19} weight={result?.passed ? 'fill' : 'regular'} /><div><strong>{goal.label}</strong>{result && <span>{result.detail}</span>}</div></li>;
+          return <li key={goal.id} className={result?.passed ? 'goal-passed' : result && !result.passed ? 'goal-failed' : ''}><CheckCircle size={19} weight={result ? 'fill' : 'regular'} /><div><strong>{goal.label}</strong>{result && <span>{result.detail}</span>}</div></li>;
         })}</ul>
         <div className={`academy-check-feedback${passed ? ' is-passed' : ''}`} role="status">{results.length > 0 && (passed ? 'All goals observed. Complete this lesson when you’re ready.' : 'Not there yet. Adjust your sketch using the feedback above, run it, then check again.')}</div>
         <p className="academy-observation-note">Checks use the current compiled sketch and simulated D{step.signal?.pin ?? step.hardware?.outputPin ?? 13} output{step.hardware ? ', plus your actual circuit connections and the stated current model' : ''}, not words in your code.</p>

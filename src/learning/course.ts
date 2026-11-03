@@ -7,6 +7,7 @@ import { readAnalogSignalsUnit } from './units/read-analog-signals';
 import { controlOutputsWithPwmUnit } from './units/control-outputs-with-pwm';
 import { handleAsynchronousEventsUnit } from './units/handle-asynchronous-events';
 import { talkToAnotherDeviceUnit } from './units/talk-to-another-device';
+import { storeDataAcrossResetsUnit } from './units/store-data-across-resets';
 import { finalProjectUnit } from './units/final-project';
 
 export const arduinoCourse: Course = {
@@ -272,6 +273,7 @@ void loop() {
     controlOutputsWithPwmUnit,
     handleAsynchronousEventsUnit,
     talkToAnotherDeviceUnit,
+    storeDataAcrossResetsUnit,
     finalProjectUnit,
   ],
 };

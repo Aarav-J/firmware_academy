@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { ArrowCounterClockwise, ArrowRight, CaretLeft, CaretRight, CheckCircle, Info, Lightbulb, Pause, Play, SkipForward, WarningCircle } from '@phosphor-icons/react';
 import type { Lesson, LessonStep } from './types';
 import { CircuitExplorer } from './CircuitExplorer';
-import { AnalogInputExplainer, BlockingDelayExplainer, DebounceExplainer, DutyCycleExplainer, EdgeEventExplainer, HysteresisExplainer, I2cTransactionExplainer, InterruptHandlerExplainer, MillisTimingExplainer, PullUpInputExplainer, SerialTraceExplainer, StateMachineExplainer, UartProtocolExplainer } from './explainers';
+import { AnalogInputExplainer, BlockingDelayExplainer, DebounceExplainer, DutyCycleExplainer, EdgeEventExplainer, EepromPersistenceExplainer, HysteresisExplainer, I2cTransactionExplainer, InterruptHandlerExplainer, MillisTimingExplainer, PullUpInputExplainer, SerialTraceExplainer, SpiTransferExplainer, StateMachineExplainer, UartProtocolExplainer } from './explainers';
 import './lesson-content.css';
 
 function BoardOutput({ high, configured = true }: { high: boolean; configured?: boolean }) {
@@ -212,7 +212,9 @@ export function LessonContent({ lesson, step, answer, onAnswer }: { lesson: Less
         {step.concept === 'interrupt-handler' && <InterruptHandlerExplainer key={`${lesson.id}/${step.id}`} />}
         {step.concept === 'uart-protocol' && <UartProtocolExplainer key={`${lesson.id}/${step.id}`} />}
         {step.concept === 'i2c-transaction' && <I2cTransactionExplainer key={`${lesson.id}/${step.id}`} />}
-        {!['execution', 'digital-output', 'timing', 'pull-up-input', 'edge-event', 'debounce', 'serial-trace', 'blocking-delay', 'millis-timing', 'state-machine', 'duty-cycle', 'analog-input', 'hysteresis', 'interrupt-handler', 'uart-protocol', 'i2c-transaction'].includes(step.concept) && <CircuitExplorer key={`${lesson.id}/${step.id}`} concept={step.concept} />}
+        {step.concept === 'spi-transfer' && <SpiTransferExplainer key={`${lesson.id}/${step.id}`} />}
+        {step.concept === 'eeprom-persistence' && <EepromPersistenceExplainer key={`${lesson.id}/${step.id}`} />}
+        {!['execution', 'digital-output', 'timing', 'pull-up-input', 'edge-event', 'debounce', 'serial-trace', 'blocking-delay', 'millis-timing', 'state-machine', 'duty-cycle', 'analog-input', 'hysteresis', 'interrupt-handler', 'uart-protocol', 'i2c-transaction', 'spi-transfer', 'eeprom-persistence'].includes(step.concept) && <CircuitExplorer key={`${lesson.id}/${step.id}`} concept={step.concept} />}
         {step.paragraphs.length > 1 && <details className="lc-model-details"><summary>About this model</summary><div className="lc-prose">{step.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div></details>}
       </>}
       {step.kind === 'predict' && <>

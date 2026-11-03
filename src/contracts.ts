@@ -25,5 +25,5 @@ export type SimulatorCommand =
 
 export type SimulatorMessage =
   | { type: 'state'; state: 'ready' | 'running' | 'paused'; timeUs: number }
-  | { type: 'frame'; timeUs: number; pins: number[]; events: TraceEvent[] }
+  | { type: 'frame'; timeUs: number; pins: number[]; events: TraceEvent[]; eeprom?: number }
   | { type: 'error'; message: string };

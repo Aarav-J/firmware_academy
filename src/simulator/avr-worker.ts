@@ -15,7 +15,7 @@
  */
 
 import type { SimulatorCommand, SimulatorMessage } from '../contracts';
-import { ATmega328PSimulation, parseIntelHex } from './avr-engine';
+import { ATmega328PSimulation, createEepromBackend, parseIntelHex } from './avr-engine';
 
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<SimulatorCommand>) => void) | null;
@@ -33,6 +33,9 @@ let generation = 0;
 let wallAnchor = 0;
 let simulationAnchor = 0;
 let lastFrame = 0;
+// Persists across every load()/reset() for this worker's lifetime — real EEPROM survives a chip
+// reset and even a new firmware flash; only a fresh worker (page reload) starts it erased.
+const eepromBackend = createEepromBackend();
 
 function stop() {
   running = false;
@@ -86,7 +89,7 @@ function load(hexBuffer: ArrayBuffer) {
   try {
     const flash = parseIntelHex(new TextDecoder().decode(hexBuffer));
     if (currentGeneration !== generation) return;
-    simulation = new ATmega328PSimulation(flash);
+    simulation = new ATmega328PSimulation(flash, eepromBackend);
     originalFlash = flash;
     scope.postMessage(simulation.frame());
     scope.postMessage({ type: 'state', state: 'ready', timeUs: 0 });
@@ -126,7 +129,7 @@ scope.onmessage = ({ data }) => {
         if (!originalFlash) throw new Error('Load valid firmware before resetting the simulator.');
         // Rebuild the chip from scratch; avr8js has no reset() that clears all
         // peripheral state, so we reconstruct the simulation object.
-        simulation = new ATmega328PSimulation(originalFlash);
+        simulation = new ATmega328PSimulation(originalFlash, eepromBackend);
         scope.postMessage(simulation.frame());
         scope.postMessage({ type: 'state', state: 'ready', timeUs: 0 });
         break;

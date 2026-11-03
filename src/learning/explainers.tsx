@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { ArrowCounterClockwise, CaretRight } from '@phosphor-icons/react';
+import { ArrowClockwise, ArrowCounterClockwise, CaretRight, Pause, Play } from '@phosphor-icons/react';
 
 function Led({ on, label }: { on: boolean; label: string }) {
   return <div className="lc-led-output"><span className={`lc-led${on ? ' lc-led-on' : ''}`} aria-hidden="true" /><span>{label}: <strong>{on ? 'ON' : 'OFF'}</strong></span></div>;
@@ -323,35 +323,223 @@ export function UartProtocolExplainer() {
 
 // --- Talk to another device: i2c-transaction -----------------------------------------
 const I2C_STEPS = ['start', 'address', 'ack', 'register', 'ack', 'repeated-start', 'data', 'nack', 'stop'] as const;
+type I2cPhase = typeof I2C_STEPS[number];
+const ADDRESS_BYTE = 0xa0; // device 0x50, write bit: (0x50 << 1) | 0
+const REGISTER_BYTE = 0x00;
+const DATA_BYTE = 0x5a; // the real identification value this device returns
+
+type I2cCell = { phase: I2cPhase; phaseIndex: number; scl: 0 | 1; sda: 0 | 1 };
+
+function byteCells(byte: number, phase: I2cPhase, phaseIndex: number): I2cCell[] {
+  const cells: I2cCell[] = [];
+  for (let bit = 7; bit >= 0; bit--) {
+    const value = (byte >> bit) & 1 ? 1 : 0;
+    cells.push({ phase, phaseIndex, scl: 0, sda: value }, { phase, phaseIndex, scl: 1, sda: value });
+  }
+  return cells;
+}
+
+function buildI2cTimeline(): I2cCell[] {
+  const cells: I2cCell[] = [];
+  const push = (phase: I2cPhase, scl: 0 | 1, sda: 0 | 1) => cells.push({ phase, phaseIndex: I2C_STEPS.indexOf(phase), scl, sda });
+  push('start', 1, 1);
+  push('start', 1, 0); // SDA falls while SCL is still HIGH — the START condition
+  cells.push(...byteCells(ADDRESS_BYTE, 'address', 1));
+  push('ack', 0, 0);
+  push('ack', 1, 0); // the device pulls SDA LOW for this clock
+  cells.push(...byteCells(REGISTER_BYTE, 'register', 3));
+  push('ack', 0, 0);
+  push('ack', 1, 0);
+  push('repeated-start', 1, 1);
+  push('repeated-start', 1, 0); // same shape as START, bus never released
+  cells.push(...byteCells(DATA_BYTE, 'data', 6));
+  push('nack', 0, 1);
+  push('nack', 1, 1); // the controller leaves SDA released — "no more bytes"
+  push('stop', 1, 0);
+  push('stop', 1, 1); // SDA rises while SCL is HIGH — the STOP condition
+  return cells;
+}
+const I2C_TIMELINE = buildI2cTimeline();
+const I2C_BYTE_LABEL: Partial<Record<I2cPhase, string>> = { address: `0x${ADDRESS_BYTE.toString(16).toUpperCase()}`, register: `0x${REGISTER_BYTE.toString(16).toUpperCase()}`, data: `0x${DATA_BYTE.toString(16).toUpperCase()}` };
+
+type WaveCell = { level: 0 | 1; step: number };
+function WaveRow({ cells, label, activeStep }: { cells: WaveCell[]; label: string; activeStep: number }) {
+  let previous: 0 | 1 | undefined;
+  return (
+    <div className="lc-bus-row">
+      <span className="lc-bus-row-label">{label}</span>
+      <div className="lc-bus-wave">
+        {cells.map((cell, index) => {
+          const edge = previous !== undefined && previous !== cell.level;
+          previous = cell.level;
+          const state = cell.step < activeStep ? 'done' : cell.step === activeStep ? 'current' : 'pending';
+          return <span key={index} className={`lc-bus-cell lc-bus-${cell.level ? 'high' : 'low'} lc-bus-${state}${edge ? ' lc-bus-edge' : ''}`} />;
+        })}
+      </div>
+    </div>
+  );
+}
+function i2cRow(cells: I2cCell[], signal: 'scl' | 'sda'): WaveCell[] {
+  return cells.map(cell => ({ level: signal === 'scl' ? cell.scl : cell.sda, step: cell.phaseIndex }));
+}
+
 export function I2cTransactionExplainer() {
   const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
   const step = I2C_STEPS[index];
-  const descriptions: Record<typeof I2C_STEPS[number], string> = {
+  const descriptions: Record<I2cPhase, string> = {
     start: 'START condition: SDA drops while SCL is HIGH, claiming the bus.',
-    address: 'The 7-bit device address plus a read/write bit go out on SDA.',
+    address: `The 7-bit device address (0x50) plus a write bit go out on SDA, MSB first: ${I2C_BYTE_LABEL.address}.`,
     ack: 'The addressed device pulls SDA LOW for one clock — acknowledging it is present.',
-    register: 'The controller sends one byte selecting which register to read.',
-    'repeated-start': 'A repeated START switches direction without releasing the bus.',
-    data: 'The device sends the requested register byte back.',
-    nack: 'The controller does not acknowledge — signaling "that was the last byte."',
+    register: `The controller sends one byte selecting which register to read: ${I2C_BYTE_LABEL.register}.`,
+    'repeated-start': 'A repeated START switches direction without releasing the bus. The address goes out again, this time with the read bit set.',
+    data: `The device shifts its register byte back out on SDA: ${I2C_BYTE_LABEL.data}.`,
+    nack: 'The controller does not acknowledge — SDA stays released, signaling "that was the last byte."',
     stop: 'STOP condition: SDA rises while SCL is HIGH, releasing the bus.',
   };
+  useEffect(() => {
+    if (!playing) return;
+    if (index >= I2C_STEPS.length - 1) { setPlaying(false); return; }
+    const timeout = window.setTimeout(() => setIndex(value => Math.min(value + 1, I2C_STEPS.length - 1)), 1400);
+    return () => window.clearTimeout(timeout);
+  }, [playing, index]);
   return (
     <div className="lc-explainer">
       <div className="lc-diagram-stage">
-        <div className="lc-i2c-steps" role="img" aria-label={`Step ${index + 1} of ${I2C_STEPS.length}: ${step}`}>
-          {I2C_STEPS.map((name, stepIndex) => <span key={stepIndex} className={`lc-i2c-step${stepIndex === index ? ' lc-i2c-current' : ''}${stepIndex < index ? ' lc-i2c-done' : ''}`}>{name}</span>)}
+        <div className="lc-bus-phases" role="img" aria-label={`Step ${index + 1} of ${I2C_STEPS.length}: ${step}`}>
+          {I2C_STEPS.map((name, stepIndex) => <span key={stepIndex} className={`lc-bus-phase${stepIndex === index ? ' lc-bus-phase-current' : ''}${stepIndex < index ? ' lc-bus-phase-done' : ''}`}>{name}</span>)}
+        </div>
+        <div className="lc-bus-waveform">
+          <WaveRow cells={i2cRow(I2C_TIMELINE, 'scl')} label="SCL" activeStep={index} />
+          <WaveRow cells={i2cRow(I2C_TIMELINE, 'sda')} label="SDA" activeStep={index} />
         </div>
         <p className="lc-narration" role="status">{descriptions[step]}</p>
       </div>
       <div className="lc-transport-row">
         <p className="lc-narration">Step {index + 1} of {I2C_STEPS.length}</p>
         <div className="lc-transport-controls">
-          <button className="secondary-button" onClick={() => setIndex(0)}><ArrowCounterClockwise size={16} aria-hidden="true" />Reset</button>
-          <button className="icon-button" aria-label="Next step" disabled={index >= I2C_STEPS.length - 1} onClick={() => setIndex(value => Math.min(value + 1, I2C_STEPS.length - 1))}><CaretRight size={16} aria-hidden="true" /></button>
+          <button className="secondary-button" onClick={() => { setPlaying(false); setIndex(0); }}><ArrowCounterClockwise size={16} aria-hidden="true" />Reset</button>
+          <button className="icon-button" aria-label="Next step" disabled={index >= I2C_STEPS.length - 1} onClick={() => { setPlaying(false); setIndex(value => Math.min(value + 1, I2C_STEPS.length - 1)); }}><CaretRight size={16} aria-hidden="true" /></button>
+          <button className="primary-button" onClick={() => setPlaying(value => !value)}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause' : index >= I2C_STEPS.length - 1 ? 'Replay' : 'Play'}</button>
         </div>
       </div>
-      <p className="lc-footnote">A wrong address gets a NACK at the address-ack step instead — the device never responds further.</p>
+      <p className="lc-footnote">A wrong address gets a NACK at the address-ack step instead — the device never responds further. I2C sends the most-significant bit first, the opposite of UART.</p>
+    </div>
+  );
+}
+
+// --- Talk to another device: spi-transfer -----------------------------------------
+const SPI_STEPS = ['select', 'command', 'reply', 'deselect'] as const;
+type SpiPhase = typeof SPI_STEPS[number];
+/** Matches avr-engine.ts's SimulatedSpiSensor exactly: read flag + register 0x00, then a dummy byte clocks the real reply out. */
+const SPI_COMMAND_BYTE = 0x80;
+const SPI_REPLY_BYTE = 0x71;
+
+type SpiCell = { phase: SpiPhase; phaseIndex: number; cs: 0 | 1; sck: 0 | 1; mosi: 0 | 1; miso: 0 | 1 };
+
+function buildSpiTimeline(): SpiCell[] {
+  const cells: SpiCell[] = [];
+  const push = (phase: SpiPhase, cs: 0 | 1, sck: 0 | 1, mosi: 0 | 1, miso: 0 | 1) => cells.push({ phase, phaseIndex: SPI_STEPS.indexOf(phase), cs, sck, mosi, miso });
+  push('select', 1, 0, 0, 1);
+  push('select', 0, 0, 0, 1); // CS falls — the device is now selected
+  for (let bit = 7; bit >= 0; bit--) {
+    const mosiBit = (SPI_COMMAND_BYTE >> bit) & 1 ? 1 : 0;
+    push('command', 0, 0, mosiBit, 1); // MISO still floats HIGH — the device has not decoded the command yet
+    push('command', 0, 1, mosiBit, 1);
+  }
+  for (let bit = 7; bit >= 0; bit--) {
+    const misoBit = (SPI_REPLY_BYTE >> bit) & 1 ? 1 : 0;
+    push('reply', 0, 0, 0, misoBit); // MOSI carries a dummy 0x00 — only the clock matters now
+    push('reply', 0, 1, 0, misoBit);
+  }
+  push('deselect', 0, 0, 0, 1);
+  push('deselect', 1, 0, 0, 1); // CS rises — released
+  return cells;
+}
+const SPI_TIMELINE = buildSpiTimeline();
+function spiRow(cells: SpiCell[], signal: 'cs' | 'sck' | 'mosi' | 'miso'): WaveCell[] {
+  return cells.map(cell => ({ level: cell[signal], step: cell.phaseIndex }));
+}
+
+export function SpiTransferExplainer() {
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const step = SPI_STEPS[index];
+  const descriptions: Record<SpiPhase, string> = {
+    select: 'The controller pulls CS LOW, selecting this device. Every other chip sharing the bus ignores the clock.',
+    command: `The controller shifts out a command byte, MSB first: the read flag plus register 0x00 — 0x${SPI_COMMAND_BYTE.toString(16).toUpperCase()}. MISO stays released HIGH; the device has not decoded the command yet.`,
+    reply: `The controller clocks out a dummy byte just to drive SCK. The device shifts its real answer back on MISO at the same time: 0x${SPI_REPLY_BYTE.toString(16).toUpperCase()}.`,
+    deselect: 'CS returns HIGH, releasing the device. A different chip on the bus could be selected next.',
+  };
+  useEffect(() => {
+    if (!playing) return;
+    if (index >= SPI_STEPS.length - 1) { setPlaying(false); return; }
+    const timeout = window.setTimeout(() => setIndex(value => Math.min(value + 1, SPI_STEPS.length - 1)), 1400);
+    return () => window.clearTimeout(timeout);
+  }, [playing, index]);
+  return (
+    <div className="lc-explainer">
+      <div className="lc-diagram-stage">
+        <div className="lc-bus-phases" role="img" aria-label={`Step ${index + 1} of ${SPI_STEPS.length}: ${step}`}>
+          {SPI_STEPS.map((name, stepIndex) => <span key={stepIndex} className={`lc-bus-phase${stepIndex === index ? ' lc-bus-phase-current' : ''}${stepIndex < index ? ' lc-bus-phase-done' : ''}`}>{name}</span>)}
+        </div>
+        <div className="lc-bus-waveform">
+          <WaveRow cells={spiRow(SPI_TIMELINE, 'cs')} label="CS" activeStep={index} />
+          <WaveRow cells={spiRow(SPI_TIMELINE, 'sck')} label="SCK" activeStep={index} />
+          <WaveRow cells={spiRow(SPI_TIMELINE, 'mosi')} label="MOSI" activeStep={index} />
+          <WaveRow cells={spiRow(SPI_TIMELINE, 'miso')} label="MISO" activeStep={index} />
+        </div>
+        <p className="lc-narration" role="status">{descriptions[step]}</p>
+      </div>
+      <div className="lc-transport-row">
+        <p className="lc-narration">Step {index + 1} of {SPI_STEPS.length}</p>
+        <div className="lc-transport-controls">
+          <button className="secondary-button" onClick={() => { setPlaying(false); setIndex(0); }}><ArrowCounterClockwise size={16} aria-hidden="true" />Reset</button>
+          <button className="icon-button" aria-label="Next step" disabled={index >= SPI_STEPS.length - 1} onClick={() => { setPlaying(false); setIndex(value => Math.min(value + 1, SPI_STEPS.length - 1)); }}><CaretRight size={16} aria-hidden="true" /></button>
+          <button className="primary-button" onClick={() => setPlaying(value => !value)}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause' : index >= SPI_STEPS.length - 1 ? 'Replay' : 'Play'}</button>
+        </div>
+      </div>
+      <p className="lc-footnote">MOSI and MISO move at the same time, in both directions, on every clock edge — the defining trait that separates SPI from I2C and UART. CS is a plain GPIO pin; the hardware has no idea which chip you mean until you drive it yourself.</p>
+    </div>
+  );
+}
+
+// --- Store data across resets: eeprom-persistence -----------------------------------------
+export function EepromPersistenceExplainer() {
+  const [written, setWritten] = useState<number | null>(null); // EEPROM content; null = erased (0xFF)
+  const [sram, setSram] = useState<number | null>(null); // SRAM content; null = zeroed by reset
+  const [resets, setResets] = useState(0);
+  function writeValue() {
+    const next = 10 + Math.floor(Math.random() * 90);
+    setWritten(next);
+    setSram(next);
+  }
+  function simulateReset() {
+    setSram(null);
+    setResets(value => value + 1);
+  }
+  const message = written === null
+    ? 'Nothing written yet. Write a value, then simulate a reset.'
+    : sram === null
+      ? `Reset #${resets}: SRAM came back zeroed, but EEPROM still holds ${written} — exactly how a real chip reset behaves.`
+      : `SRAM and EEPROM both hold ${written} right now. Simulate a reset to see them diverge.`;
+  return (
+    <div className="lc-explainer">
+      <div className="lc-diagram-stage">
+        <div className="lc-edge-pair">
+          <div><span>SRAM (volatile)</span><strong>{sram === null ? '0' : sram}</strong></div>
+          <div><span>EEPROM (persistent)</span><strong>{written === null ? '0xFF' : written}</strong></div>
+        </div>
+        <p className="lc-narration" role="status">{message}</p>
+      </div>
+      <div className="lc-transport-row">
+        <p className="lc-narration">Resets simulated: {resets}</p>
+        <div className="lc-transport-controls">
+          <button className="secondary-button" onClick={writeValue}>Write a value</button>
+          <button className="primary-button" onClick={simulateReset} disabled={written === null}><ArrowClockwise size={16} aria-hidden="true" />Simulate reset</button>
+        </div>
+      </div>
+      <p className="lc-footnote">This is a simplified two-bank model, not wired to the real engine. The actual exercise writes to a real simulated EEPROM peripheral — pressing the workbench's own Reset button there genuinely leaves its content untouched.</p>
     </div>
   );
 }

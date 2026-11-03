@@ -3,14 +3,17 @@ import type { CircuitDraft, CircuitGoal, CircuitScenario } from './circuit-types
 
 export type ConceptId = 'execution' | 'digital-output' | 'timing' | 'closed-circuit' | 'led-polarity' | 'resistor-current' | 'external-output'
   | 'pull-up-input' | 'edge-event' | 'debounce' | 'serial-trace' | 'blocking-delay' | 'millis-timing' | 'state-machine'
-  | 'duty-cycle' | 'analog-input' | 'hysteresis' | 'interrupt-handler' | 'uart-protocol' | 'i2c-transaction';
+  | 'duty-cycle' | 'analog-input' | 'hysteresis' | 'interrupt-handler' | 'uart-protocol' | 'i2c-transaction'
+  | 'spi-transfer' | 'eeprom-persistence';
 export type GoalRule = 'build' | 'steady-high' | 'delayed-low' | 'timed-blink' | 'circuit-wiring'
   | 'mirrors-input' | 'toggles-per-press' | 'debounced-count' | 'reports-events'
   | 'responsive-under-load' | 'state-sequence'
   | 'duty-cycle-match' | 'duty-tracks-input'
   | 'reports-analog-value' | 'scales-measurement' | 'hysteresis-indicator'
   | 'interrupt-count' | 'uart-command-handled'
-  | 'i2c-identifies-device' | 'i2c-handles-failure';
+  | 'i2c-identifies-device' | 'i2c-handles-failure'
+  | 'spi-identifies-device' | 'spi-handles-failure'
+  | 'eeprom-round-trip' | 'eeprom-persists-value';
 export type ExerciseGoal = { id: string; label: string; rule: GoalRule; pin?: number; highMs?: number; lowMs?: number };
 export type SignalTarget = { pin: number; highMs: number; lowMs: number };
 export type ReadStep = {
@@ -102,6 +105,7 @@ export type WorkbenchObservation = {
   analogVoltage?: number;
   serial?: string;
   lastSerialCommand?: string;
+  eeprom?: number;
 };
 export type WorkbenchControls = {
   available: boolean;

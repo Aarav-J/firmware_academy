@@ -155,5 +155,91 @@ void loop() {}
         },
       ],
     },
+    {
+      id: 'move-data-on-a-shared-clock',
+      title: 'Move data on a shared clock',
+      description: 'A full-duplex transfer, a chip-select pin, and an honest reading when nothing is selected.',
+      durationMinutes: 15,
+      steps: [
+        {
+          id: 'introduction',
+          kind: 'read',
+          title: 'SPI has no address byte — it has a pin',
+          paragraphs: [
+            'SPI moves data over four wires: SCK (clock), MOSI (controller-to-device), MISO (device-to-controller), and CS (chip select). Unlike I2C, there is no address byte on the wire at all — the controller picks which device it is talking to by pulling that device\'s own CS pin LOW. Every other device on the same SCK/MOSI/MISO lines ignores the clock while its own CS stays HIGH.',
+            'SPI is full-duplex: on every single clock edge, one bit moves out on MOSI and one bit moves in on MISO at the same time. There is no separate "now I\'m sending" and "now I\'m receiving" phase the way I2C has — a transfer always moves data both directions at once, even if one side has nothing useful to say yet.',
+            'A common pattern for reading a register is a command byte followed by a dummy byte: the controller sends the register address (often with a read flag in the top bit), then sends a meaningless dummy byte purely to keep the clock running — the device uses that second byte\'s clock pulses to shift its real reply out on MISO.',
+            'CS is a plain GPIO pin. The SPI hardware peripheral has no idea which chip you mean until your own code drives that pin — forgetting to pull it LOW before a transfer is a genuine, common mistake, not a library bug.',
+          ],
+          takeaway: 'Addressing on SPI happens through a dedicated CS pin, not a byte on the wire — and every transfer moves data in both directions at once.',
+        },
+        {
+          id: 'explore',
+          kind: 'explore',
+          title: 'Follow one real transfer',
+          concept: 'spi-transfer',
+          paragraphs: [
+            'Step through CS falling, the command byte, the reply byte, and CS rising again.',
+          ],
+          instruction: 'Watch MOSI and MISO closely during the command byte — notice they are both active on the exact same clock edges, even though only one of them is carrying something meaningful yet.',
+        },
+        {
+          id: 'predict',
+          kind: 'predict',
+          title: 'What does the device send back during the command byte?',
+          prompt: 'The controller is clocking out the command byte on MOSI — the device has not even finished reading it yet, let alone looked up a reply. What does the real avr8js-simulated device drive on MISO during that exact same byte?',
+          options: [
+            { id: 'nothing', label: 'Nothing — SPI only moves data in one direction at a time.' },
+            { id: 'immediate-id', label: 'The identification byte, immediately — SPI is fast enough to reply within the same byte.' },
+            { id: 'placeholder', label: '0xFF — a placeholder, because full-duplex SPI must drive something on every clock, even with nothing to say yet.' },
+            { id: 'last-value', label: 'Whatever value was last written to it by a previous transfer.' },
+          ],
+          answerId: 'placeholder',
+          explanation: 'SPI is full-duplex: a bit goes out on MISO for every single bit clocked in on MOSI, with no way to skip it. A real device that has not decoded the command yet simply drives a placeholder (commonly 0xFF) rather than leaving the line undefined.',
+        },
+        {
+          id: 'exercise',
+          kind: 'exercise',
+          title: 'Read the chip ID register over SPI',
+          paragraphs: [
+            'This workbench simulates one real SPI peripheral, selected by pulling pin 10 (CS) LOW. Its identification register (register 0x00) holds the fixed value 0x71.',
+            'Select the device, send the command byte (the read flag plus register 0x00), send a dummy byte to clock the reply out, then release CS — and print the real identification byte over Serial. Then attempt a second read without pulling CS low first, and report that failure explicitly, without losing the first successful reading.',
+          ],
+          starterCode: `#include <SPI.h>
+
+const int CS = 10;
+
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  pinMode(CS, OUTPUT);
+  digitalWrite(CS, HIGH); // idle deselected
+
+  // Select the device, read register 0x00, then release it.
+  // digitalWrite(CS, LOW);
+  // SPI.transfer(0x80);        // read flag + register 0x00
+  // byte id = SPI.transfer(0x00); // dummy byte clocks the real reply out
+  // digitalWrite(CS, HIGH);
+  // Serial.print("ID: "); Serial.println(id, HEX);
+
+  // Then read again WITHOUT selecting the device first, and print an
+  // explicit error for that reading — without erasing the line above.
+}
+
+void loop() {}
+`,
+          goals: [
+            { id: 'build', label: 'Build the sketch successfully', rule: 'build' },
+            { id: 'spi-identifies-device', label: 'Read the real identification register (0x71) while the device is selected', rule: 'spi-identifies-device' },
+            { id: 'spi-handles-failure', label: 'Report the deselected-read failure explicitly, while still showing the last valid reading', rule: 'spi-handles-failure' },
+          ],
+          hints: [
+            'digitalWrite(CS, LOW) before SPI.transfer(), digitalWrite(CS, HIGH) after — the device only answers while selected, exactly like a real chip.',
+            'SPI.transfer(0x80) sends the read flag plus register 0; SPI.transfer(0x00) is a dummy byte whose only job is to keep the clock running so the real reply shifts out.',
+            'Read again without pulling CS LOW first — the device reports 0xFF (released bus). Print an explicit error for that case, keeping the earlier successful line visible.',
+          ],
+        },
+      ],
+    },
   ],
 };

@@ -69,6 +69,7 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
   const [pins, setPins] = useState(EMPTY_PINS);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [serial, setSerial] = useState('');
+  const [eeprom, setEeprom] = useState<number | undefined>(undefined);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [mode, setMode] = useState<'simulation' | 'registers' | 'hardware'>('simulation');
   const [consoleTab, setConsoleTab] = useState<'serial' | 'build' | 'runtime'>('serial');
@@ -211,8 +212,8 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, [dark]);
   useEffect(() => { if (darkMode !== undefined) setDark(darkMode); }, [darkMode]);
   useEffect(() => {
-    learning?.onObservation({ built: buildState === 'success' && !stale && !building, state: simState, timeUs, pins, trace, startupTrace: learningStartupTrace.current, circuit: learning.circuit, analogVoltage: learning.analogVoltage, serial, lastSerialCommand: learning.lastSerialCommand });
-  }, [learning?.onObservation, learning?.circuit, learning?.analogVoltage, learning?.lastSerialCommand, buildState, stale, building, simState, timeUs, pins, trace, serial]);
+    learning?.onObservation({ built: buildState === 'success' && !stale && !building, state: simState, timeUs, pins, trace, startupTrace: learningStartupTrace.current, circuit: learning.circuit, analogVoltage: learning.analogVoltage, serial, lastSerialCommand: learning.lastSerialCommand, eeprom });
+  }, [learning?.onObservation, learning?.circuit, learning?.analogVoltage, learning?.lastSerialCommand, buildState, stale, building, simState, timeUs, pins, trace, serial, eeprom]);
   useEffect(() => { serialElement.current?.scrollTo({ top: serialElement.current.scrollHeight }); }, [serial]);
 
   useEffect(() => {
@@ -234,7 +235,7 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
             setSimLoaded(true); setSimLoading(false);
             if (runAfterLoad.current) { runAfterLoad.current = false; instance.postMessage({ type: 'run' } satisfies SimulatorCommand); }
           }
-        } else acceptEvents(data.timeUs, data.pins, data.events, 0);
+        } else acceptEvents(data.timeUs, data.pins, data.events, 0, data.eeprom);
       };
       instance.onerror = event => { if (current === generation.current) { setError(`Simulator worker failed: ${event.message}`); setSimState('error'); setSimLoaded(false); setSimLoading(false); } };
     }
@@ -261,10 +262,13 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
     };
   }, [profileId]);
 
-  function acceptEvents(at: number, levels: number[], events: TraceEvent[], expectedPort: number) {
+  function acceptEvents(at: number, levels: number[], events: TraceEvent[], expectedPort: number, eepromValue?: number) {
     if (at < lastFrameTime.current) { setTrace([]); setSerial(''); setSnapshot(null); learningStartupTrace.current = []; }
     lastFrameTime.current = at;
     setTimeUs(at); setPins(levels);
+    // EEPROM intentionally survives the reset-clearing above — it is backed by a store the worker
+    // reuses across resets, exactly like real EEPROM surviving a chip reset.
+    if (eepromValue !== undefined) setEeprom(eepromValue);
     if (events.length) {
       if (learning) {
         for (const event of events) {

@@ -4,15 +4,18 @@
  * Peripheral wiring (Arduino Uno pin numbering):
  *   Pin 13 = PB5 — onboard LED, active-high output
  *   Pin  2 = PD2 — external active-low button (INT0), pulled up externally
+ *   Pin 10 = PB2 — chip-select for the course's one simulated SPI peripheral
  *   USART0  — Serial.begin()/print() at 9600 or 57600 baud (firmware configures)
  *
  * CPU clock: 16 MHz  →  16 cycles per microsecond
- * Flash: 32 KB  |  SRAM: 2 KB  (ATmega328P spec)
+ * Flash: 32 KB  |  SRAM: 2 KB  |  EEPROM: 1 KB  (ATmega328P spec)
  */
 
 import {
   AVRADC,
+  AVREEPROM,
   AVRIOPort,
+  AVRSPI,
   AVRTWI,
   AVRTimer,
   AVRUSART,
@@ -20,16 +23,18 @@ import {
   PinState,
   adcConfig,
   avrInstruction,
+  eepromConfig,
   portBConfig,
   portCConfig,
   portDConfig,
+  spiConfig,
   timer0Config,
   timer1Config,
   timer2Config,
   twiConfig,
   usart0Config,
 } from 'avr8js';
-import type { TWIEventHandler } from 'avr8js';
+import type { EEPROMBackend, TWIEventHandler } from 'avr8js';
 import type { SimulatorMessage, TraceEvent } from '../contracts';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +72,49 @@ class SimulatedI2CSensor implements TWIEventHandler {
     this.pointer = (this.pointer + 1) % this.registers.length;
   }
 }
+
+/** A fixed register map for the course's one simulated SPI peripheral — not a real commercial part. Register 0x00 holds the chip ID. */
+const SPI_CHIP_ID = 0x71;
+const SPI_READ_FLAG = 0x80;
+
+/**
+ * Classic command-byte + dummy-byte register read, exactly like Arduino's SPI.transfer() pattern for
+ * real sensors. Only responds while chip-select is held LOW — released (deselected) reads return 0xFF,
+ * modeling a floating, undriven MISO line, the same honest "garbage on a bad connection" lesson as I2C's NACK.
+ */
+class SimulatedSpiSensor {
+  private selected = false;
+  private pendingRegister = -1;
+  private readonly registers = new Uint8Array([SPI_CHIP_ID]);
+  setChipSelect(low: boolean): void {
+    this.selected = low;
+    if (!low) this.pendingRegister = -1;
+  }
+  transfer(value: number): number {
+    if (!this.selected) return 0xff;
+    if (this.pendingRegister < 0) {
+      this.pendingRegister = value & SPI_READ_FLAG ? value & 0x7f : -2; // -2: a write command this device does not support
+      return 0xff; // nothing useful yet — this clock carried the command byte
+    }
+    const register = this.pendingRegister;
+    this.pendingRegister = -1;
+    return register >= 0 ? this.registers[register] ?? 0xff : 0xff;
+  }
+}
+
+/** ATmega328P has 1 KB of EEPROM. */
+const EEPROM_SIZE = 1024;
+
+/** A plain in-memory backing store. Callers that want EEPROM content to survive a simulated reset
+ * must reuse the same backend across ATmega328PSimulation constructions; a fresh call here starts erased. */
+export function createEepromBackend(): EEPROMBackend {
+  const memory = new Uint8Array(EEPROM_SIZE).fill(0xff); // erased EEPROM reads as 0xFF
+  return {
+    readMemory: address => memory[address] ?? 0xff,
+    writeMemory: (address, value) => { memory[address] = value; },
+    eraseMemory: address => { memory[address] = 0xff; },
+  };
+}
 // Arduino digital pin numbering, standard ATmega328P/Uno mapping:
 // D0-D7 = PORTD bits 0-7; D8-D13 = PORTB bits 0-5 (6,7 are the crystal);
 // A0-A5 = PORTC bits 0-5, numbered 14-19 (6 is reset, 7 unused).
@@ -77,6 +125,9 @@ const PORTC_PINS = [14, 15, 16, 17, 18, 19] as const;
 /** Arduino digital pin 2 = PD2 (INT0, active-low button) — driven explicitly via setButton(), not read generically. */
 const BUTTON_PIN = 2;
 const BUTTON_BIT = 2; // bit index within PORTD
+
+/** Arduino digital pin 10 = PB2 — chip-select for the simulated SPI sensor, a plain GPIO pin the firmware drives manually. */
+const SPI_CS_BIT = 2; // bit index within PORTB_PINS
 
 // ---------------------------------------------------------------------------
 // Intel HEX parser
@@ -131,6 +182,9 @@ export class ATmega328PSimulation {
   /** ADC0-ADC5 (A0-A5) channel voltages; set from the UI via setAnalogInput(). */
   private readonly adc: AVRADC;
   private readonly twi: AVRTWI;
+  private readonly spi: AVRSPI;
+  private readonly eeprom: AVREEPROM;
+  private readonly eepromBackend: EEPROMBackend;
 
   // Timers are required for Arduino millis()/micros()/delay() to function.
   // They register clock-event callbacks on the CPU; cpu.tick() dispatches them.
@@ -156,7 +210,7 @@ export class ATmega328PSimulation {
 
   private buttonPressed = false;
 
-  constructor(flash: Uint8Array) {
+  constructor(flash: Uint8Array, eepromBackend: EEPROMBackend = createEepromBackend()) {
     // avr8js CPU accepts a Uint16Array of 16-bit instruction words.
     // Intel HEX bytes are little-endian: byte[0] is the low byte of word[0].
     const progWords = new Uint16Array(FLASH_SIZE / 2);
@@ -182,6 +236,20 @@ export class ATmega328PSimulation {
     this.twi = new AVRTWI(this.cpu, twiConfig, F_CPU);
     this.twi.eventHandler = new SimulatedI2CSensor(this.twi);
 
+    // SPI – one fixed simulated peripheral, selected by pulling pin 10 (CS) LOW.
+    this.spi = new AVRSPI(this.cpu, spiConfig, F_CPU);
+    const spiSensor = new SimulatedSpiSensor();
+    this.spi.onByte = (value: number) => {
+      const reply = spiSensor.transfer(value);
+      this.cpu.addClockEvent(() => this.spi.completeTransfer(reply), this.spi.transferCycles);
+    };
+
+    // EEPROM – 1 KB, backed by whatever store the caller provides. The worker reuses the same
+    // backend across every load()/reset() call so content survives a simulated reset, exactly
+    // like real EEPROM surviving a chip reset while ordinary SRAM does not.
+    this.eeprom = new AVREEPROM(this.cpu, eepromBackend, eepromConfig);
+    this.eepromBackend = eepromBackend;
+
     // Timers – construction hooks TCCR*/TIMSK*/TCNT*/OCR* into cpu.writeHooks[].
     // All three are required: timer0 drives millis/micros, timer1/2 are used by
     // many libraries and PWM generation.
@@ -200,6 +268,17 @@ export class ATmega328PSimulation {
     this.attachPort(this.portB, PORTB_PINS);
     this.attachPort(this.portC, PORTC_PINS);
     this.attachPort(this.portD, PORTD_PINS);
+
+    // -----------------------------------------------------------------------
+    // Pin 10 (PB2): SPI chip-select. Just a plain GPIO pin — classic AVR SPI
+    // hardware has no CS logic of its own, the firmware drives it manually.
+    // The simulated sensor only answers while this reads LOW (selected).
+    // -----------------------------------------------------------------------
+    this.portB.addListener(() => {
+      const state = this.portB.pinState(SPI_CS_BIT);
+      if (state === PinState.Low) spiSensor.setChipSelect(true);
+      else if (state === PinState.High) spiSensor.setChipSelect(false);
+    });
 
     // -----------------------------------------------------------------------
     // Pin 2 (PD2 / INT0): active-low external button.
@@ -286,6 +365,11 @@ export class ATmega328PSimulation {
     }
   }
 
+  /** Reads a byte directly from the EEPROM backing store — real persisted content, not register state. */
+  readEeprom(address: number): number {
+    return this.eepromBackend.readMemory(address);
+  }
+
   /**
    * Drain the current event trace and return a frame message.
    * Sorts events by timestamp before returning (UART chunk events can span
@@ -302,7 +386,7 @@ export class ATmega328PSimulation {
     }
     this.traceCount = 0;
     events.sort((a, b) => a.timeUs - b.timeUs);
-    return { type: 'frame', timeUs: this.timeUs, pins: this.pins.slice(), events };
+    return { type: 'frame', timeUs: this.timeUs, pins: this.pins.slice(), events, eeprom: this.readEeprom(0) };
   }
 
   // -------------------------------------------------------------------------

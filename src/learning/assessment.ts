@@ -29,6 +29,11 @@ function lastNumber(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Matches a hex token as a standalone word, whether or not the student prefixes it with 0x/0X. */
+function hasHexValue(text: string, hex: string): boolean {
+  return new RegExp(`\\b${hex}\\b`, 'i').test(text.replace(/0x/gi, ''));
+}
+
 export function assessExercise(step: ExerciseStep, observation: WorkbenchObservation | null): GoalResult[] {
   const built = observation?.built === true;
   const active = built && observation !== null && (observation.state === 'running' || observation.state === 'paused');
@@ -192,15 +197,39 @@ export function assessExercise(step: ExerciseStep, observation: WorkbenchObserva
     }
 
     if (goal.rule === 'i2c-identifies-device') {
-      const passed = /\b5A\b/i.test(text);
+      const passed = hasHexValue(text, '5A');
       return { id: goal.id, passed, detail: passed ? 'Serial output reports the identification register value 0x5A read from the supported device.' : 'Serial output does not yet show the identification register (0x5A) read from the supported device address.' };
     }
 
     if (goal.rule === 'i2c-handles-failure') {
       const reportsFailure = /\berr\w*\b|\bfail\w*\b|\bnack\b/i.test(text);
-      const reportsLastGood = /\b5A\b/i.test(text) || /\bA4\b/.test(text);
+      const reportsLastGood = hasHexValue(text, '5A') || hasHexValue(text, 'A4');
       const passed = reportsFailure && reportsLastGood;
       return { id: goal.id, passed, detail: passed ? 'Serial output reports the communication failure for the unsupported address and still shows the last valid reading.' : 'Address both the supported and an unsupported device. Report the failure explicitly and keep showing the last successful reading, not a blank or crashed state.' };
+    }
+
+    if (goal.rule === 'spi-identifies-device') {
+      const passed = hasHexValue(text, '71');
+      return { id: goal.id, passed, detail: passed ? 'Serial output reports the identification register value 0x71 read over SPI.' : 'Serial output does not yet show the identification register (0x71) read over SPI.' };
+    }
+
+    if (goal.rule === 'spi-handles-failure') {
+      const reportsFailure = /\berr\w*\b|\bfail\w*\b/i.test(text);
+      const reportsLastGood = hasHexValue(text, '71');
+      const passed = reportsFailure && reportsLastGood;
+      return { id: goal.id, passed, detail: passed ? 'Serial output reports the deselected-bus failure and still shows the last valid chip ID.' : 'Read the device both selected and deselected. Report the deselected failure explicitly and keep showing the last successful reading, not a blank or crashed state.' };
+    }
+
+    // --- Unit: Store data across resets --------------------------------------------
+    if (goal.rule === 'eeprom-round-trip') {
+      const reported = lastNumber(text);
+      const passed = reported !== null && observation.eeprom !== undefined && reported === observation.eeprom;
+      return { id: goal.id, passed, detail: passed ? `Reported ${reported} matches the real EEPROM byte your sketch just read back.` : `Reported ${reported ?? 'no value'}; the real EEPROM byte currently holds ${observation.eeprom ?? 'an unknown value'}. Print exactly what EEPROM.read() returns.` };
+    }
+
+    if (goal.rule === 'eeprom-persists-value') {
+      const passed = observation.eeprom !== undefined && observation.eeprom !== 0xff;
+      return { id: goal.id, passed, detail: passed ? `EEPROM address 0 really holds ${observation.eeprom} — not the erased value. It will still be there after a reset.` : 'EEPROM address 0 still reads 0xFF (erased). Call EEPROM.write() or EEPROM.update() with a real value.' };
     }
 
     return { id: goal.id, passed: false, detail: `Unknown goal rule: ${goal.rule}.` };
