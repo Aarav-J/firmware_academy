@@ -72,8 +72,8 @@
 .academy-exercise-layout.instructions-hidden { grid-template-columns: minmax(0, 1fr); }
 .academy-exercise-instructions { padding: 20px 22px; background: var(--surface); border-right: 1px solid var(--border); min-width: 0; }
 .academy-back-explanation { display: inline-flex; align-items: center; gap: 7px; padding: 0; font-size: 11px; color: var(--accent); min-height: 24px; }
-.academy-eyebrow { font-family: var(--code-font); font-size: 12px; color: var(--accent); letter-spacing: .07em; margin: 0; }
-.academy-exercise-instructions .academy-eyebrow { margin-top: 14px; }
+.academy-eyebrow { font-family: var(--code-font); font-size: 11px; color: var(--accent); letter-spacing: .13em; text-transform: uppercase; margin: 0; }
+.academy-exercise-instructions .academy-eyebrow { margin-top: 14px; color: var(--accent); }
 .academy-exercise-instructions h1 { font-size: 22px; line-height: 1.25; letter-spacing: -.025em; margin: 8px 0 18px; outline: none; }
 .academy-exercise-instructions > p { color: var(--muted); font-size: 14px; line-height: 1.8; margin: 0 0 15px; overflow-wrap: anywhere; }
 .academy-exercise-instructions h2 { font-size: 13px; margin: 26px 0 16px; }
@@ -118,6 +118,15 @@
 .academy-free-workbench { flex: 1; outline: none; }
 .academy-free-workbench > .workbench-shell { min-height: calc(100dvh - 72px); }
 .academy-free-workbench .workbench-shell > .app-header { display: none; }
+.academy-workbench-intro { padding: 36px 28px 0; max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
+.academy-workbench-intro h1 { margin: 0; font-size: clamp(26px, 3.2vw, 36px); line-height: 1.12; font-weight: 700; letter-spacing: -.04em; text-wrap: balance; }
+.academy-back-link { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--accent); text-decoration: none; width: fit-content; }
+.academy-back-link:hover { text-decoration: underline; }
+.academy-project-missing { flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; max-width: 540px; margin: 0 auto; padding: 48px 24px; outline: none; }
+.academy-project-missing h1 { margin: 0; font-size: 24px; }
+.academy-project-missing p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.academy-projects { flex: 1; display: flex; flex-direction: column; outline: none; }
+@media (max-width: 760px) { .academy-workbench-intro { padding: 24px 18px 0; } }
 @media (min-width: 761px) {
   .academy-exercise { height: 100dvh; min-height: 420px; overflow: hidden; }
   .academy-exercise-instructions { min-height: 0; overflow: auto; }

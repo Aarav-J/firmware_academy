@@ -5,6 +5,10 @@ import { arduinoCourse } from './course';
 import { CourseTimeline } from './CourseTimeline';
 import { LessonContent } from './LessonContent';
 import { PaneDivider } from './PaneDivider';
+import { Landing } from './Landing';
+import { ProjectsHome } from './ProjectsHome';
+import { findProject, touchProject } from './projects';
+import type { SavedProject } from './projects';
 import { CircuitActivity } from './CircuitActivity';
 import { decodeCircuitDraft } from './circuit-model';
 import type { CircuitDraft } from './circuit-types';
@@ -17,16 +21,19 @@ import './learning.css';
 const Workbench = lazy(() => import('../App'));
 const lessons = courseLessons(arduinoCourse);
 const kindLabels = { read: 'Learn', explore: 'Explore', predict: 'Predict', circuit: 'Practice', exercise: 'Build' };
-type Route = { view: 'course' | 'workbench' } | { view: 'lesson'; lessonId: string; stepId: string };
+type Route = { view: 'landing' | 'course' | 'projects' } | { view: 'project'; projectId: string } | { view: 'lesson'; lessonId: string; stepId: string };
 
 function currentRoute(): Route {
-  if (location.hash === '#/workbench') return { view: 'workbench' };
+  if (location.hash === '#/projects' || location.hash === '#/workbench') return { view: 'projects' };
+  const projectMatch = /^#\/projects\/([^/]+)$/.exec(location.hash);
+  if (projectMatch) return { view: 'project', projectId: projectMatch[1] };
+  if (location.hash === '#/course') return { view: 'course' };
   const match = /^#\/learn\/([^/]+)\/([^/]+)$/.exec(location.hash);
   const lesson = match && lessons.find(item => item.id === match[1]);
   if (lesson && (match[2] === 'complete' || lesson.steps.some(step => step.id === match[2]))) {
     return { view: 'lesson', lessonId: lesson.id, stepId: match[2] };
   }
-  return { view: 'course' };
+  return { view: 'landing' };
 }
 
 function readProgress() {
@@ -80,7 +87,7 @@ export default function LearningApp() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     headingRef.current?.focus({ preventScroll: true });
-    document.title = lesson ? `${lesson.title} | Firmware Academy` : route.view === 'workbench' ? 'Workbench | Firmware Academy' : 'Arduino fundamentals | Firmware Academy';
+    document.title = lesson ? `${lesson.title} | Firmware Academy` : route.view === 'project' || route.view === 'projects' ? 'Projects | Firmware Academy' : route.view === 'course' ? 'Arduino fundamentals | Firmware Academy' : 'Firmware Academy — Make code do something';
   }, [route.view, lesson?.id, route.view === 'lesson' ? route.stepId : '']);
 
   useEffect(() => {
@@ -144,18 +151,20 @@ export default function LearningApp() {
           </CompactMenu>
           {themeButton}
         </header>
-      ) : (
+      ) : route.view === 'landing' ? null : (
         <header className="academy-header">
-          <a className="academy-wordmark" href="#/course" aria-label="Firmware Academy courses"><span className="academy-diamond" aria-hidden="true" /><strong>firmware<span>/academy</span></strong></a>
-          <nav aria-label="Main navigation" className="academy-navigation"><a href="#/course" aria-current={route.view !== 'workbench' ? 'page' : undefined}><BookOpen size={17} />Learn</a><a href="#/workbench" aria-current={route.view === 'workbench' ? 'page' : undefined}><Code size={17} />Workbench</a></nav>
+          <a className="academy-wordmark" href="#/" aria-label="Firmware Academy home"><span className="academy-diamond" aria-hidden="true" /><strong>firmware<span>/academy</span></strong></a>
+          <nav aria-label="Main navigation" className="academy-navigation"><a href="#/course" aria-current={route.view === 'course' ? 'page' : undefined}><BookOpen size={17} />Learn</a><a href="#/projects" aria-current={route.view === 'projects' || route.view === 'project' ? 'page' : undefined}><Code size={17} />Projects</a></nav>
           {themeButton}
         </header>
       )}
       {storageError && <div className="academy-storage-notice" role="status">Browser storage is unavailable. You can keep learning, but progress and code may not survive a reload.</div>}
+      {route.view === 'landing' && <Landing dark={dark} onToggleTheme={() => setDark(value => !value)} />}
       {route.view === 'course' && <main id="academy-content" className="academy-course" ref={headingRef} tabIndex={-1}><CourseTimeline course={arduinoCourse} progress={progress} onOpenLesson={openLesson} /></main>}
-      {route.view === 'workbench' && <div id="academy-content" ref={headingRef} tabIndex={-1} className="academy-free-workbench"><Suspense fallback={<WorkspaceLoading />}><Workbench darkMode={dark} /></Suspense></div>}
+      {route.view === 'projects' && <main id="academy-content" className="academy-projects" ref={headingRef} tabIndex={-1}><ProjectsHome onOpen={id => go(`#/projects/${id}`)} /></main>}
+      {route.view === 'project' && <ProjectWorkbenchRoute projectId={route.projectId} dark={dark} onMissing={() => go('#/projects')} />}
       {lesson && step && <>
-        {outlineOpen && <nav ref={outlineRef} id="academy-outline" className="academy-outline" aria-label="Lesson outline"><div><strong>{unit?.title}</strong><button className="icon-button" aria-label="Close course outline" onClick={() => { setOutlineOpen(false); outlineButton.current?.focus(); }}><X size={18} /></button></div>{unit?.lessons.map(item => <div className="academy-outline-lesson" key={item.id}><button onClick={() => openLesson(item.id)} aria-current={item.id === lesson.id ? 'page' : undefined}>{lessonComplete(item, progress) ? <CheckCircle size={18} /> : <BookOpen size={18} />}{item.title}</button>{item.id === lesson.id && item.steps.map(part => <button className="academy-outline-step" key={part.id} onClick={() => go(`#/learn/${item.id}/${part.id}`)} aria-current={part.id === step.id && !complete ? 'step' : undefined}>{progress.completedSteps.includes(stepKey(item.id, part.id)) ? <CheckCircle size={14} /> : <span className="academy-step-dot" />}{part.title}</button>)}</div>)}<a href="#/course">View full course roadmap <ArrowRight size={16} /></a><a href="#/workbench">Open free workbench <Code size={16} /></a></nav>}
+        {outlineOpen && <nav ref={outlineRef} id="academy-outline" className="academy-outline" aria-label="Lesson outline"><div><strong>{unit?.title}</strong><button className="icon-button" aria-label="Close course outline" onClick={() => { setOutlineOpen(false); outlineButton.current?.focus(); }}><X size={18} /></button></div>{unit?.lessons.map(item => <div className="academy-outline-lesson" key={item.id}><button onClick={() => openLesson(item.id)} aria-current={item.id === lesson.id ? 'page' : undefined}>{lessonComplete(item, progress) ? <CheckCircle size={18} /> : <BookOpen size={18} />}{item.title}</button>{item.id === lesson.id && item.steps.map(part => <button className="academy-outline-step" key={part.id} onClick={() => go(`#/learn/${item.id}/${part.id}`)} aria-current={part.id === step.id && !complete ? 'step' : undefined}>{progress.completedSteps.includes(stepKey(item.id, part.id)) ? <CheckCircle size={14} /> : <span className="academy-step-dot" />}{part.title}</button>)}</div>)}<a href="#/course">View full course roadmap <ArrowRight size={16} /></a><a href="#/projects">Open Projects <Code size={16} /></a></nav>}
         {complete ? <main id="academy-content" className="academy-completion" ref={headingRef} tabIndex={-1}><CheckCircle size={52} weight="duotone" /><p>Lesson complete</p><h1>{lesson.title}</h1><p>{lesson.description}</p><div className="academy-completion-summary"><strong>You worked through the whole loop.</strong><span>{lesson.steps.some(part => part.kind === 'exercise') ? 'Learned the concept, explored the model, made a prediction, and checked real firmware output.' : 'Learned the concept, explored the model, made a prediction, and checked your circuit and reasoning.'}</span></div><button className="primary-button" onClick={() => nextLesson ? openLesson(nextLesson.id) : go('#/course')}>{nextLesson ? `Next: ${nextLesson.title}` : 'Back to course'}<ArrowRight size={17} /></button><button className="text-button" onClick={() => go(`#/learn/${lesson.id}/${lesson.steps[0].id}`)}>Review this lesson</button></main>
           : step.kind === 'circuit' ? <main id="academy-content" className="academy-circuit-activity" ref={headingRef} tabIndex={-1}><CircuitActivity key={key} step={step} draft={progress.circuits?.[key] ?? decodeCircuitDraft(step.scenario, null)} onChange={draft => setProgress(previous => ({ ...previous, circuits: { ...previous.circuits, [key]: draft }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onComplete={finishStep} /></main>
           : step.kind === 'exercise' ? <ExerciseView key={key} lesson={lesson} step={step} eyebrow={eyebrow} source={progress.drafts[key] ?? step.starterCode} circuit={step.hardware ? progress.circuits?.[key] ?? decodeCircuitDraft(step.hardware, null) : undefined} dark={dark} onSourceChange={source => setProgress(previous => ({ ...previous, drafts: { ...previous.drafts, [key]: source }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onCircuitChange={draft => setProgress(previous => ({ ...previous, circuits: { ...previous.circuits, [key]: draft }, completedSteps: previous.completedSteps.filter(item => item !== key) }))} onContinue={finishStep} onBack={() => go(`#/learn/${lesson.id}/${lesson.steps[stepIndex - 1].id}`)} />
@@ -191,6 +200,30 @@ function CompactMenu({ label, accessibleLabel, className = '', children }: {
 
 function WorkspaceLoading() {
   return <div className="academy-workspace-loading" role="status"><div /><div /><p>Opening your firmware workspace…</p></div>;
+}
+
+function ProjectWorkbenchRoute({ projectId, dark, onMissing }: { projectId: string; dark: boolean; onMissing: () => void }) {
+  const [project, setProject] = useState<SavedProject | undefined>(() => findProject(projectId));
+  useEffect(() => {
+    const found = findProject(projectId);
+    setProject(found);
+    if (found) touchProject(found.id);
+  }, [projectId]);
+  if (!project) {
+    return <main id="academy-content" className="academy-project-missing" tabIndex={-1}>
+      <h1>Project not found</h1>
+      <p>It may have been deleted on this device — projects are stored locally in this browser.</p>
+      <button className="primary-button" onClick={onMissing}>Back to projects</button>
+    </main>;
+  }
+  return <div id="academy-content" tabIndex={-1} className="academy-free-workbench">
+    <div className="academy-workbench-intro">
+      <a className="academy-back-link" href="#/projects"><ArrowLeft size={14} />All projects</a>
+      <span className="academy-eyebrow">Project · locked environment</span>
+      <h1>{project.name}</h1>
+    </div>
+    <Suspense fallback={<WorkspaceLoading />}><Workbench key={project.id} project={project} darkMode={dark} /></Suspense>
+  </div>;
 }
 
 function ExerciseView({ lesson, step, eyebrow, source, circuit, dark, onSourceChange, onCircuitChange, onContinue, onBack }: {

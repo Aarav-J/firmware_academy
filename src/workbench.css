@@ -1,8 +1,9 @@
 .profile-control { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .profile-control > svg { color: var(--accent); flex-shrink: 0; }
 .profile-control > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.profile-control label { font-size: 10px; color: var(--muted); }
-.profile-control select { font-size: 12px; font-weight: 600; max-width: 430px; min-height: 32px; }
+.profile-control-label { display: block; font-size: 10px; color: var(--muted); }
+.profile-control-name { font-size: 13px; font-weight: 600; }
+.profile-control-env { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .project-editor-layout { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 145px minmax(0, 1fr); overflow: hidden; }
 .project-files { background: var(--surface-raised); border-right: 1px solid var(--border); padding: 12px 0; min-width: 0; overflow: auto; }
 .project-files > span { display: block; padding: 0 13px 12px; font-size: 10px; color: var(--muted); }
@@ -27,9 +28,9 @@
 .stm32-hardware dt, .arduino-hardware dt { font-weight: 600; margin-top: 10px; }
 .stm32-hardware dd, .arduino-hardware dd { color: var(--muted); margin: 4px 0 12px; }
 .stm32-hardware .hw-panel, .arduino-hardware .hw-panel { border-top: 1px solid var(--border); padding-top: 18px; }
-@media (max-width: 1150px) { .project-editor-layout { grid-template-columns: 116px minmax(0, 1fr); } .project-files > button { padding: 9px 8px; gap: 5px; font-size: 9px; } .profile-control select { max-width: 360px; } .console-tabs button { padding: 0 10px; } }
-@media (max-width: 800px) { .project-editor-layout { min-height: 390px; height: 390px; flex: none; grid-template-columns: 115px minmax(0, 1fr); } .project-editor-layout .code-editor { height: 390px; } .profile-control select { max-width: 290px; font-size: 11px; } .profile-control > svg { display: none; } .workbench-toolbar { flex-wrap: wrap; } .run-controls { margin-left: auto; } .console-tabs button { font-size: 10px; padding: 0 9px; } }
-@media (max-width: 440px) { .profile-control { width: 100%; } .profile-control > div { width: 100%; } .profile-control select { max-width: none; width: 100%; } .workbench-toolbar { gap: 10px; } .run-controls { width: 100%; justify-content: flex-end; } .project-editor-layout { grid-template-columns: 92px minmax(0, 1fr); } .project-files > button { font-size: 8px; gap: 4px; } .project-files > button svg { width: 12px; } .editor-toolbar .text-button { font-size: 10px; } .editor-actions { gap: 0; } }
+@media (max-width: 1150px) { .project-editor-layout { grid-template-columns: 116px minmax(0, 1fr); } .project-files > button { padding: 9px 8px; gap: 5px; font-size: 9px; } .console-tabs button { padding: 0 10px; } }
+@media (max-width: 800px) { .project-editor-layout { min-height: 390px; height: 390px; flex: none; grid-template-columns: 115px minmax(0, 1fr); } .project-editor-layout .code-editor { height: 390px; } .profile-control > svg { display: none; } .workbench-toolbar { flex-wrap: wrap; } .run-controls { margin-left: auto; } .console-tabs button { font-size: 10px; padding: 0 9px; } }
+@media (max-width: 440px) { .profile-control { width: 100%; } .profile-control > div { width: 100%; } .workbench-toolbar { gap: 10px; } .run-controls { width: 100%; justify-content: flex-end; } .project-editor-layout { grid-template-columns: 92px minmax(0, 1fr); } .project-files > button { font-size: 8px; gap: 4px; } .project-files > button svg { width: 12px; } .editor-toolbar .text-button { font-size: 10px; } .editor-actions { gap: 0; } }
 
 /* ── Saved Projects Panel ────────────────────────────────────────────────── */
 .saved-projects { position: relative; display: flex; flex-direction: column; }

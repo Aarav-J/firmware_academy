@@ -5,9 +5,11 @@ import { cpp } from '@codemirror/lang-cpp';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { EditorView } from '@codemirror/view';
 import { ArrowCounterClockwise, ArrowSquareOut, CaretDown, CaretUp, CheckCircle, Circuitry, Code, Cpu, DownloadSimple, FileCode, Pause, Play, TerminalWindow, WarningCircle } from '@phosphor-icons/react';
-import type { CompileResult, CompilerHealth, SimulatorCommand, SimulatorMessage, TraceEvent } from './contracts';
-import type { ProjectBuildResult, ProjectId, ProjectProfile, RegisterSnapshot, RenodeCommand, RenodeFrame, RenodeSessionInfo } from './workbench-contracts';
-import { ARDUINO_EXAMPLES, DEFAULT_SOURCE, examples } from './examples';
+import type { CompileResult, SimulatorCommand, SimulatorMessage, TraceEvent } from './contracts';
+import type { ProjectBuildResult, ProjectId, RegisterSnapshot, RenodeCommand, RenodeFrame, RenodeSessionInfo } from './workbench-contracts';
+import { ARDUINO_EXAMPLES, examples } from './examples';
+import { useEnvironmentCatalog } from './environment-catalog';
+import { PROJECT_FILES_PREFIX } from './learning/projects';
 import { pinLabelFor } from './board-pinouts';
 import { appendSerial, decodeBase64, retainPinTrace } from './trace';
 import { apiRequest, BrowserRenodeSession } from './renode-client';
@@ -25,35 +27,29 @@ import './learning/output-drawer.css';
 
 const codeExtensions = [cpp()];
 const EMPTY_PINS = Array<number>(80).fill(0);
-const PICO: ProjectProfile = {
-  id: 'pico', name: 'Pico SDK', board: 'Raspberry Pi Pico', framework: 'Pico SDK · C',
-  description: 'RP2040 firmware runs in a browser worker.', available: false, message: 'Connecting to compiler…',
-  files: [{ path: 'main.c', content: DEFAULT_SOURCE, editable: true }],
-};
 const REGISTER_PROFILES = new Set<ProjectId>(['stm32-baremetal', 'stm32-zephyr']);
 
-type ProjectFiles = Partial<Record<ProjectId, Record<string, string>>>;
-function savedProjects(): ProjectFiles {
+/** A project's environment is locked at creation — this reads only that one
+ * project's persisted files, never a different project's or environment's. */
+function readProjectFiles(projectId: string | undefined): Record<string, string> {
+  if (!projectId) return {};
   try {
-    const parsed = JSON.parse(localStorage.getItem('firmware-academy:projects') || '{}');
+    const parsed: unknown = JSON.parse(localStorage.getItem(PROJECT_FILES_PREFIX + projectId) || '{}');
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const pico = localStorage.getItem('firmware-academy:main.c');
-    if (!parsed.pico && pico) parsed.pico = { 'main.c': pico };
-    return parsed;
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
   } catch { return {}; }
 }
 
-export default function App({ learning, darkMode, paneDivider }: { learning?: LearningWorkspace; darkMode?: boolean; paneDivider?: ReactNode } = {}) {
-  const [profiles, setProfiles] = useState<ProjectProfile[]>(() => learning ? [PICO, {
-    id: 'arduino-uno', name: 'Arduino · Uno', board: 'Arduino Uno · ATmega328P', framework: 'Arduino',
-    description: 'Arduino lesson environment.', available: false, message: 'Connecting to the Arduino compiler…',
-    files: [{ path: 'sketch.ino', content: learning.source, editable: true }],
-  }] : [PICO]);
-  const [profileId, setProfileId] = useState<ProjectId>(learning ? 'arduino-uno' : 'stm32-baremetal');
-  const [projects, setProjects] = useState<ProjectFiles>(() => learning ? { 'arduino-uno': { 'sketch.ino': learning.source } } : savedProjects());
-  const [activeFile, setActiveFile] = useState(learning ? 'sketch.ino' : 'main.c');
-  const [profileError, setProfileError] = useState('');
-  const [health, setHealth] = useState<CompilerHealth | null>(null);
+export type LockedProject = { id: string; name: string; profileId: ProjectId };
+
+export default function App({ learning, project, darkMode, paneDivider }: { learning?: LearningWorkspace; project?: LockedProject; darkMode?: boolean; paneDivider?: ReactNode } = {}) {
+  const catalog = useEnvironmentCatalog();
+  const profiles = catalog.profiles;
+  // The environment is fixed for the lifetime of this workspace: a lesson is always
+  // Arduino, and a project was locked to its environment the moment it was created.
+  const profileId: ProjectId = learning ? 'arduino-uno' : project?.profileId ?? 'stm32-baremetal';
+  const [files, setFiles] = useState<Record<string, string>>(() => learning ? { 'sketch.ino': learning.source } : readProjectFiles(project?.id));
+  const [activeFile, setActiveFile] = useState(learning ? 'sketch.ino' : profileId === 'stm32-zephyr' ? 'src/main.c' : profileId === 'arduino-uno' ? 'sketch.ino' : 'main.c');
   const [building, setBuilding] = useState(false);
   const [artifact, setArtifact] = useState<Uint8Array | null>(null);
   const [hexArtifact, setHexArtifact] = useState<Uint8Array | null>(null);
@@ -104,11 +100,11 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
   const uartPort = profileId === 'stm32-baremetal' || profileId === 'stm32-zephyr' ? 2 : 0;
   const exampleSet = isPico ? examples : isArduino ? ARDUINO_EXAMPLES : null;
   const file = profile?.files.find(item => item.path === activeFile) ?? profile?.files[0];
-  const currentFiles = Object.fromEntries((profile?.files ?? []).filter(item => item.editable).map(item => [item.path, typeof projects[profileId]?.[item.path] === 'string' ? projects[profileId]![item.path] : item.content]));
+  const currentFiles = Object.fromEntries((profile?.files ?? []).filter(item => item.editable).map(item => [item.path, typeof files[item.path] === 'string' ? files[item.path] : item.content]));
   const projectKey = JSON.stringify({ profile: profileId, files: currentFiles });
   const stale = builtKey !== null && projectKey !== builtKey;
   const editorContent = file ? currentFiles[file.path] ?? file.content : '';
-  const available = isPico ? !!health?.ready : !!profile?.available;
+  const available = isPico ? !!catalog.health?.ready : !!profile?.available;
   const controlsEnabled = simLoaded && !simLoading && !building && !controlBusy && !inspecting;
   const lintExtensions = useMemo(() => buildLintExtensions(() => buildOutputRef.current, () => file?.path ?? ''), [file?.path]);
   const onControls = learning?.onControls;
@@ -184,31 +180,11 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
   }
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function refresh() {
-      const results = await Promise.allSettled([
-        apiRequest<ProjectProfile[]>('/api/projects', { signal: controller.signal }),
-        apiRequest<CompilerHealth>('/api/health', { signal: controller.signal }),
-      ]);
-      if (controller.signal.aborted) return;
-      if (results[0].status === 'fulfilled') {
-        setProfiles([PICO, ...results[0].value.filter(item => item.id !== 'pico')]);
-        setProfileError('');
-      } else setProfileError(results[0].reason instanceof Error ? results[0].reason.message : 'Project service unavailable.');
-      if (results[1].status === 'fulfilled') setHealth(results[1].value);
-      else setHealth(null);
-    }
-    void refresh();
-    const timer = setInterval(() => void refresh(), 15_000);
-    return () => { controller.abort(); clearInterval(timer); };
-  }, []);
-
-  useEffect(() => {
-    if (learning) return;
-    const save = () => { try { localStorage.setItem('firmware-academy:projects', JSON.stringify(projects)); } catch { /* Editing remains possible if browser storage is full. */ } };
+    if (learning || !project) return;
+    const save = () => { try { localStorage.setItem(PROJECT_FILES_PREFIX + project.id, JSON.stringify(files)); } catch { /* Editing remains possible if browser storage is full. */ } };
     const timer = setTimeout(save, 300);
     return () => { clearTimeout(timer); save(); };
-  }, [projects, learning]);
+  }, [files, learning, project?.id]);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, [dark]);
   useEffect(() => { if (darkMode !== undefined) setDark(darkMode); }, [darkMode]);
   useEffect(() => {
@@ -304,27 +280,14 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
     if (editorViewRef.current && file) applyDiagnostics(editorViewRef.current, output, file.path);
   }
 
-  function changeProfile(id: ProjectId) {
-    if (id === profileId) return;
-    compileAbort.current?.abort();
-    session.current?.dispose(); session.current = null;
-    worker.current?.terminate(); worker.current = null;
-    ++generation.current;
-    setProfileId(id);
-    setActiveFile(id === 'stm32-zephyr' ? 'src/main.c' : id === 'arduino-uno' ? 'sketch.ino' : 'main.c');
-    setArtifact(null); setHexArtifact(null); setBuildId(null); setBuiltKey(null); setBuildState('idle');
-    setSimLoaded(false); setSimLoading(false); setSimState('empty'); setBuilding(false);
-    setError(''); setControlBusy(false); setInspecting(false); setMode('simulation'); clearExecution(); applyLint('');
-  }
-
   function updateFile(value: string) {
     if (!file?.editable) return;
-    setProjects(previous => ({ ...previous, [profileId]: { ...previous[profileId], [file.path]: value } }));
+    setFiles(previous => ({ ...previous, [file.path]: value }));
     learning?.onSourceChange(value);
   }
 
-  function loadSavedFiles(files: Record<string, string>) {
-    setProjects(previous => ({ ...previous, [profileId]: files }));
+  function loadSavedFiles(loaded: Record<string, string>) {
+    setFiles(loaded);
   }
 
   async function buildAndRun() {
@@ -443,7 +406,7 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
 
   function restoreTemplate() {
     if (!profile || !window.confirm(`Restore all ${profile.name} project files? Your saved edits for this profile will be replaced.`)) return;
-    setProjects(previous => ({ ...previous, [profileId]: {} }));
+    setFiles({});
   }
 
   function downloadSource() {
@@ -460,7 +423,7 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const unavailable = profileError || (!profile ? 'Loading project profiles…' : !available ? (isPico ? health?.message || 'Pico compiler unavailable.' : profile.message) : '');
+  const unavailable = catalog.error || (!profile ? 'Loading project profiles…' : !available ? (isPico ? catalog.health?.message || 'Pico compiler unavailable.' : profile.message) : '');
   return (
     <div className={`workbench-shell${learning ? ' lesson-workbench' : ''}`}>
       <header className="app-header">
@@ -469,7 +432,7 @@ export default function App({ learning, darkMode, paneDivider }: { learning?: Le
         <div className="header-right"><span className={`compiler-status ${available ? 'ready' : ''}`}><span />{available ? 'Toolchain ready' : 'Setup required'}</span><button className="text-button theme-button" onClick={() => setDark(value => !value)} aria-label={`Switch to ${dark ? 'light' : 'dark'} theme`}>{dark ? 'Light theme' : 'Dark theme'}</button></div>
       </header>
       {!learning && <div className="workbench-toolbar">
-        <div className="profile-control"><Cpu size={20} /><div><label htmlFor="project-profile">Project environment</label><select id="project-profile" value={profileId} onChange={event => changeProfile(event.target.value as ProjectId)}>{!profiles.some(item => item.id === profileId) && <option value={profileId}>Loading project profiles…</option>}{profiles.map(item => <option key={item.id} value={item.id}>{item.name} · {item.board}</option>)}</select></div></div>
+        <div className="profile-control"><Cpu size={20} /><div><span className="profile-control-label">Project · locked environment</span><strong className="profile-control-name">{project?.name ?? 'Untitled project'}</strong><span className="profile-control-env">{profile ? `${profile.name} · ${profile.board}` : 'Loading environment…'}</span></div></div>
         <div className="run-controls"><button className="icon-button" aria-label="Reset simulation" title="Reset simulation" disabled={!controlsEnabled} onClick={() => void control({ type: 'reset' })}><ArrowCounterClockwise size={19} /></button><button className="secondary-button pause-button" disabled={!controlsEnabled} onClick={() => void control({ type: simState === 'running' ? 'pause' : 'run' })}>{simState === 'running' ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}{simState === 'running' ? 'Pause' : 'Resume'}</button><button className="primary-button" disabled={building || simLoading || !available} onClick={() => void buildAndRun()}><Play size={16} weight="fill" />{building ? 'Building…' : simLoading ? 'Starting…' : 'Build & run'}</button></div>
       </div>}
       {(unavailable || error || stale) && <div className={`notice-bar ${error ? 'error-notice' : ''}`} role={error ? 'alert' : 'status'}><WarningCircle size={18} /><span>{error || (stale ? 'Project changed. Running firmware and downloads remain from the last successful build; build again to update them.' : unavailable)}</span>{error && <button className="text-button" onClick={() => setError('')}>Dismiss</button>}</div>}

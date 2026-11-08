@@ -13,9 +13,9 @@
   margin: 0 0 24px;
   max-width: 25ch;
   font-size: clamp(25px, 3vw, 34px);
-  font-weight: 650;
-  line-height: 1.25;
-  letter-spacing: -.025em;
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -.04em;
   text-wrap: balance;
 }
 

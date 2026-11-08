@@ -23,7 +23,14 @@ type BreadboardProps = {
 };
 type Selection = { kind: 'part' | 'wire' | 'hole'; id: string } | null;
 type View = { x: number; y: number; scale: number };
-type Drag = { pointerId: number; start: BenchPoint; last: BenchPoint; part?: string; view: View; moved: boolean };
+type Drag = { pointerId: number; start: BenchPoint; last: BenchPoint; part?: string; leg?: { instanceId: string; pinId: string }; view: View; moved: boolean };
+type LegGhost = { instanceId: string; pinId: string; x: number; y: number };
+/** How far a single lead can be nudged from its seated spot in one drag — short enough
+ * that it reads as "bending this lead a bit," never as relocating the whole part. */
+const MAX_LEG_REACH = 150;
+/** Default spacing (world px, ~24px/hole) between a freshly-placed part's seated leads —
+ * wide enough for a resistor's body and bands; adjacent-hole pitch suits everything else. */
+const DEFAULT_LEG_PITCH: Record<string, number> = { resistor: 120 };
 const EMPTY: BreadboardLayout = { version: 2, components: [], wires: [] };
 const STORAGE_PREFIX = 'firmware-academy:breadboard:';
 const PARTS = new Map(BREADBOARD_PARTS.map(part => [part.id, part]));
@@ -88,6 +95,9 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
   const [located, setLocated] = useState<PinRef | null>(null);
   const [adding, setAdding] = useState(false);
   const [dragPreview, setDragPreview] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [legDragPreview, setLegDragPreview] = useState<LegGhost | null>(null);
+  const [placing, setPlacing] = useState<string | null>(null);
+  const [placingPoint, setPlacingPoint] = useState<BenchPoint | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const expandButton = useRef<HTMLButtonElement>(null);
@@ -218,20 +228,35 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
     publish(next); setPending(null); setRoute([]); setCursor(null); setSelection({ kind: 'wire', id: wire.id });
     setMessage(`Connected ${describeRef(wire.a, layout, boardKey)} → ${describeRef(wire.b, layout, boardKey)}.`);
   }
-  function addComponent(componentId: string) {
+  function trySeat(componentId: string, anchor: BenchPoint): Record<string, string> | null {
+    const definition = PARTS.get(componentId);
+    if (!definition) return null;
+    const used = new Set(occupied.keys());
+    const holes: Record<string, string> = {};
+    for (let index = 0; index < definition.pins.length; index++) {
+      const pin = definition.pins[index];
+      const desired = { x: anchor.x + index * (DEFAULT_LEG_PITCH[componentId] ?? 26), y: anchor.y + 48 };
+      let closest: { id: string; distance: number } | null = null;
+      for (const hole of BREADBOARD_HOLES) {
+        if (used.has(hole.id)) continue;
+        const distance = pointDistance(hole, desired);
+        if (!closest || distance < closest.distance) closest = { id: hole.id, distance };
+      }
+      if (!closest || closest.distance > 17) return null;
+      holes[pin.id] = closest.id;
+      used.add(closest.id);
+    }
+    return holes;
+  }
+  function addComponent(componentId: string, at?: BenchPoint) {
     if (layout.components.length >= 32) { setMessage('The bench supports 32 parts. Remove a part before adding another.'); return; }
     const definition = PARTS.get(componentId); if (!definition) return;
-    const holes: Record<string, string> = {};
-    if (componentId === 'resistor' || componentId === 'led') {
-      const span = componentId === 'resistor' ? 5 : 1;
-      for (let number = 2; number + span <= 30; number++) {
-        const a = `e${number}`, b = `e${number + span}`;
-        if (!occupied.has(a) && !occupied.has(b)) { holes[definition.pins[0].id] = a; holes[definition.pins[1].id] = b; break; }
-      }
-    }
-    const part: PlacedComponent = { instanceId: `${componentId}-${crypto.randomUUID().slice(0, 6)}`, componentId, x: 570 + layout.components.length % 4 * 170, y: 640, holes, ...(componentId === 'resistor' ? { resistanceOhms: 330 } : {}) };
+    const anchor = at ?? { x: 570 + layout.components.length % 4 * 170, y: 640 };
+    const holes = trySeat(componentId, anchor) ?? {};
+    const part: PlacedComponent = { instanceId: `${componentId}-${crypto.randomUUID().slice(0, 6)}`, componentId, x: anchor.x, y: anchor.y, holes, ...(componentId === 'resistor' ? { resistanceOhms: 330 } : {}) };
     publish({ ...layout, components: [...layout.components, part] });
-    setSelection({ kind: 'part', id: part.instanceId }); setAdding(false); setMessage(`${definition.name} added. Inspect its leads below or drag the body to place it.`);
+    setSelection({ kind: 'part', id: part.instanceId }); setAdding(false); setPlacing(null); setPlacingPoint(null);
+    setMessage(Object.keys(holes).length ? `${definition.name} added and seated. Drag its body to move it, or drag a single lead to nudge just that connection.` : `${definition.name} added. Drag its body onto the breadboard to seat it, or drag a single lead into a hole.`);
   }
   function pointerPoint(event: { clientX: number; clientY: number }): BenchPoint {
     const bounds = canvas.current!.getBoundingClientRect();
@@ -242,6 +267,7 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
     if (event.button !== 0 && event.button !== 1) return;
     if ((event.target as Element).closest('.bench-hud')) return;
     const point = pointerPoint(event);
+    if (placing && event.button === 0) { addComponent(placing, worldPoint(point)); suppressClick.current = true; return; }
     if (!pointers.current.size) suppressClick.current = false;
     pointers.current.set(event.pointerId, point);
     if (pointers.current.size === 2) {
@@ -252,10 +278,14 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
     }
     const target = event.target as Element;
     const part = target.closest('[data-part-id]')?.getAttribute('data-part-id') ?? undefined;
+    const legEl = target.closest('[data-leg]');
+    const leg = legEl?.getAttribute('data-leg') ?? undefined;
     const isEndpoint = target.closest('[data-endpoint]');
     const isWire = target.closest('[data-wire-id]');
-    if (space.current || mode === 'pan' || event.button === 1 || part || (!isEndpoint && !isWire)) {
-      drag.current = { pointerId: event.pointerId, start: point, last: point, view: { ...viewRef.current }, part: mode === 'wire' && !space.current ? part : undefined, moved: false };
+    if (space.current || mode === 'pan' || event.button === 1 || part || leg || (!isEndpoint && !isWire)) {
+      const legSeparator = leg ? leg.indexOf(':') : -1;
+      const legRef = leg && legSeparator > 0 ? { instanceId: leg.slice(0, legSeparator), pinId: leg.slice(legSeparator + 1) } : undefined;
+      drag.current = { pointerId: event.pointerId, start: point, last: point, view: { ...viewRef.current }, part: mode === 'wire' && !space.current && !legRef ? part : undefined, leg: mode === 'wire' && !space.current ? legRef : undefined, moved: false };
       event.currentTarget.setPointerCapture(event.pointerId);
       if (event.button === 1) event.preventDefault();
     }
@@ -269,20 +299,47 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
       setViewport({ scale, x: center.x - (gesture.center.x - gesture.view.x) / gesture.view.scale * scale, y: center.y - (gesture.center.y - gesture.view.y) / gesture.view.scale * scale }); return;
     }
     if (pending) setCursor(worldPoint(point));
+    if (placing) setPlacingPoint(worldPoint(point));
     const state = drag.current;
     if (!state || state.pointerId !== event.pointerId) return;
     state.last = point;
     if (pointDistance(point, state.start) > 5) state.moved = true;
     if (!state.moved) return;
     suppressClick.current = true;
-    if (state.part) setDragPreview({ id: state.part, x: (point.x - state.start.x) / state.view.scale, y: (point.y - state.start.y) / state.view.scale });
+    if (state.leg) {
+      const legPart = current.current.components.find(item => item.instanceId === state.leg!.instanceId);
+      const origin = legPart ? componentPinPoint(legPart, state.leg!.pinId) : undefined;
+      if (origin) {
+        const raw = { x: (point.x - state.start.x) / state.view.scale, y: (point.y - state.start.y) / state.view.scale };
+        const reach = Math.hypot(raw.x, raw.y);
+        const clamped = reach > MAX_LEG_REACH ? { x: raw.x * MAX_LEG_REACH / reach, y: raw.y * MAX_LEG_REACH / reach } : raw;
+        setLegDragPreview({ instanceId: state.leg.instanceId, pinId: state.leg.pinId, x: origin.x + clamped.x, y: origin.y + clamped.y });
+      }
+    } else if (state.part) setDragPreview({ id: state.part, x: (point.x - state.start.x) / state.view.scale, y: (point.y - state.start.y) / state.view.scale });
     else setViewport({ ...state.view, x: state.view.x + point.x - state.start.x, y: state.view.y + point.y - state.start.y });
   }
   function pointerUp(event: ReactPointerEvent<HTMLDivElement>, cancelled = false) {
     pointers.current.delete(event.pointerId);
-    if (pinch.current) { if (pointers.current.size < 2) pinch.current = null; drag.current = null; setDragPreview(null); return; }
-    const state = drag.current; drag.current = null; setDragPreview(null);
-    if (!state || state.pointerId !== event.pointerId || cancelled || !state.part) return;
+    if (pinch.current) { if (pointers.current.size < 2) pinch.current = null; drag.current = null; setDragPreview(null); setLegDragPreview(null); return; }
+    const state = drag.current; drag.current = null; setDragPreview(null); setLegDragPreview(null);
+    if (!state || state.pointerId !== event.pointerId || cancelled) return;
+    if (state.leg) {
+      if (!state.moved) return;
+      const legPart = current.current.components.find(item => item.instanceId === state.leg!.instanceId); if (!legPart) return;
+      const origin = componentPinPoint(legPart, state.leg!.pinId); if (!origin) return;
+      const raw = { x: (state.last.x - state.start.x) / state.view.scale, y: (state.last.y - state.start.y) / state.view.scale };
+      const reach = Math.hypot(raw.x, raw.y);
+      const clamped = reach > MAX_LEG_REACH ? { x: raw.x * MAX_LEG_REACH / reach, y: raw.y * MAX_LEG_REACH / reach } : raw;
+      const desired = { x: origin.x + clamped.x, y: origin.y + clamped.y };
+      let closest = BREADBOARD_HOLES[0], distance = Infinity;
+      for (const hole of BREADBOARD_HOLES) { const d = pointDistance(hole, desired); if (d < distance) { distance = d; closest = hole; } }
+      if (distance > 17) { setMessage('Lead released without reaching a free hole. No change made.'); return; }
+      const holes = { ...legPart.holes, [state.leg.pinId]: closest.id };
+      const label = PARTS.get(legPart.componentId)?.pins.find(pin => pin.id === state.leg!.pinId)?.label ?? state.leg.pinId;
+      if (updatePart(legPart.instanceId, { holes })) setMessage(`${label} lead moved to ${closest.id}. The rest of the part stayed put.`);
+      return;
+    }
+    if (!state.part) return;
     if (!state.moved) {
       setSelection({ kind: 'part', id: state.part }); setLocated(null);
       suppressClick.current = true;
@@ -319,7 +376,8 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
     if (editable(event.target)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (pending) { setPending(null); setRoute([]); setMessage('Jumper cancelled.'); }
+      if (placing) { setPlacing(null); setPlacingPoint(null); setMessage('Placement cancelled.'); }
+      else if (pending) { setPending(null); setRoute([]); setMessage('Jumper cancelled.'); }
       else if (finder || adding) { setFinder(false); setAdding(false); }
       else if (expanded) { setExpanded(false); expandButton.current?.focus(); }
       else setSelection(null);
@@ -377,7 +435,7 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
     const isLocated = !!located && samePinRef(located, ref);
     const isOccupied = ref.kind === 'breadboard' && occupied.has(ref.pinId);
     const live = ref.kind === 'board' ? pins[LIVE_PIN_INDEX[boardKey][ref.pinId]] : undefined;
-    return <g key={pinRefKey(ref)} data-endpoint={pinRefKey(ref)} className={`bench-endpoint${selectedNet(ref) ? ' is-net' : ''}${isPending ? ' is-pending' : ''}${isLocated ? ' is-located' : ''}${isOccupied ? ' is-occupied' : ''}${live === 1 ? ' is-high' : ''}`} role="button" tabIndex={-1} aria-label={`${describeRef(ref, layout, boardKey)}${isOccupied ? ` occupied by ${occupied.get(ref.pinId)}` : ''}`} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(ref); } }} onClick={event => { event.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } if (mode === 'wire') choose(ref); }} onPointerEnter={() => setHover(ref)} onPointerLeave={() => setHover(null)}>
+    return <g key={pinRefKey(ref)} data-endpoint={pinRefKey(ref)} data-leg={ref.kind === 'component' ? `${ref.instanceId}:${ref.pinId}` : undefined} className={`bench-endpoint${selectedNet(ref) ? ' is-net' : ''}${isPending ? ' is-pending' : ''}${isLocated ? ' is-located' : ''}${isOccupied ? ' is-occupied' : ''}${live === 1 ? ' is-high' : ''}`} role="button" tabIndex={-1} aria-label={`${describeRef(ref, layout, boardKey)}${isOccupied ? ` occupied by ${occupied.get(ref.pinId)}` : ''}`} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(ref); } }} onClick={event => { event.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } if (mode === 'wire') choose(ref); }} onPointerEnter={() => setHover(ref)} onPointerLeave={() => setHover(null)}>
       <title>{describeRef(ref, layout, boardKey)}{ref.kind === 'breadboard' ? ` · ${holeNet(ref.pinId)} connected strip${isOccupied ? ' · occupied' : ''}` : live === undefined ? '' : ` · ${live ? 'HIGH' : 'LOW'}`}</title>
       {isLocated && <circle cx={point.x} cy={point.y} r="16" className="bench-pin-locator" />}
       <rect x={point.x - 5} y={point.y - 5} width="10" height="10" rx={ref.kind === 'board' ? 1 : 3} className="bench-socket-rim" />
@@ -403,9 +461,9 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
       </div>
     </div>
     {finder && <section className="bench-finder" aria-label="Pin finder"><div><strong>Find a pin or hole</strong><button type="button" aria-label="Close pin finder" onClick={() => setFinder(false)}><X size={17} /></button></div><input autoFocus type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="D8, GND, anode, c19…" aria-label="Search pins and holes" /><p>Locate first, then select the highlighted socket to wire it.</p><div className="bench-finder-results">{findResults.map(result => <button key={pinRefKey(result.ref)} type="button" onClick={() => locate(result.ref)}>{result.label}<span>Locate ↗</span></button>)}{!findResults.length && <p>No matching pin or hole. Try D8, GND, or a hole such as c19.</p>}</div></section>}
-    {adding && <section className="bench-parts-bin" aria-label="Component parts bin">{BREADBOARD_PARTS.filter(part => !scenario || scenario.allowedParts.includes(part.id)).map(part => <button key={part.id} type="button" onClick={() => addComponent(part.id)}>{part.id === 'resistor' ? <svg viewBox="0 0 64 30" aria-hidden="true"><path d="M1 15H63" stroke="#89979a" strokeWidth="3" /><rect x="17" y="6" width="30" height="18" rx="6" fill="#dfc18b" /><path d="M24 6V24 M31 6V24" stroke="#c74437" strokeWidth="4" /></svg> : part.id === 'led' ? <svg viewBox="0 0 64 30" aria-hidden="true"><path d="M27 18V29 M37 18V29" stroke="#89979a" strokeWidth="2" /><path d="M21 20V12A11 11 0 0 1 43 12V20Z" fill="#c5473f" /></svg> : <span className="bench-module-preview" aria-hidden="true" />}<span>{part.name}</span></button>)}</section>}
+    {adding && <section className="bench-parts-bin" aria-label="Component parts bin">{BREADBOARD_PARTS.filter(part => !scenario || scenario.allowedParts.includes(part.id)).map(part => <button key={part.id} type="button" aria-pressed={placing === part.id} onClick={() => { setPlacing(part.id); setAdding(false); setPlacingPoint(null); setPending(null); setRoute([]); setMessage(`Click the breadboard to place the ${part.name}. Press Escape to cancel.`); }}>{part.id === 'resistor' ? <svg viewBox="0 0 64 30" aria-hidden="true"><path d="M1 15H63" stroke="#89979a" strokeWidth="3" /><rect x="17" y="6" width="30" height="18" rx="6" fill="#dfc18b" /><path d="M24 6V24 M31 6V24" stroke="#c74437" strokeWidth="4" /></svg> : part.id === 'led' ? <svg viewBox="0 0 64 30" aria-hidden="true"><path d="M27 18V29 M37 18V29" stroke="#89979a" strokeWidth="2" /><path d="M21 20V12A11 11 0 0 1 43 12V20Z" fill="#c5473f" /></svg> : <span className="bench-module-preview" aria-hidden="true" />}<span>{part.name}</span></button>)}</section>}
     <div className="bench-scene-wrap" hidden={explain}>
-      <div ref={canvas} className={`bench-scene${mode === 'pan' ? ' is-pan' : ''}`} tabIndex={0} aria-label="Circuit canvas. Plus and minus zoom; arrows pan; Home fits the circuit. Use Find a pin for keyboard wiring." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={event => pointerUp(event)} onPointerCancel={event => pointerUp(event, true)} onLostPointerCapture={event => { pointers.current.delete(event.pointerId); }} onClick={sceneClick} onKeyUp={event => { if (event.code === 'Space') space.current = false; }} onBlur={() => { space.current = false; }}>
+      <div ref={canvas} className={`bench-scene${mode === 'pan' ? ' is-pan' : ''}${placing ? ' is-placing' : ''}`} tabIndex={0} aria-label="Circuit canvas. Plus and minus zoom; arrows pan; Home fits the circuit. Use Find a pin for keyboard wiring." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={event => pointerUp(event)} onPointerCancel={event => pointerUp(event, true)} onLostPointerCapture={event => { pointers.current.delete(event.pointerId); }} onClick={sceneClick} onKeyUp={event => { if (event.code === 'Space') space.current = false; }} onBlur={() => { space.current = false; }}>
         <svg className="bench-world" width="100%" height="100%" aria-label="Arduino and solderless breadboard physical wiring surface">
           <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
             <BenchBoard boardKey={boardKey} pins={pins} />
@@ -414,8 +472,8 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
             <rect {...BREADBOARD_BODY} rx="12" fill="#eeeae0" stroke="#c3c3b7" strokeWidth="2" />
             <rect x="524" y="382" width="786" height="17" rx="6" fill="#cbc9bf" /><path d="M532 388H1302" stroke="#b6b7af" strokeWidth="2" />
             {[189, 253, 526, 590].map((y, index) => <g key={y}><path d={`M548 ${y}H1280`} stroke={index % 2 ? '#4f8ab1' : '#c86758'} strokeWidth="2" /><text x="531" y={y + 5} fill={index % 2 ? '#376887' : '#9c4337'} fontSize="19">{index % 2 ? '−' : '+'}</text></g>)}
-            {Array.from({ length: 30 }, (_, index) => <g key={index}><text x={565 + index * 24} y="267" textAnchor="middle" fill="#646c68" fontSize="12">{index + 1}</text><text x={565 + index * 24} y="518" textAnchor="middle" fill="#646c68" fontSize="12">{index + 1}</text></g>)}
-            {Array.from('abcdefghij', (letter, index) => <g key={letter}><text x="542" y={(index < 5 ? 276 + index * 22 : 414 + (index - 5) * 22) + 4} textAnchor="middle" fill="#5d6863" fontSize="14">{letter}</text><text x="1293" y={(index < 5 ? 276 + index * 22 : 414 + (index - 5) * 22) + 4} textAnchor="middle" fill="#5d6863" fontSize="14">{letter}</text></g>)}
+            {Array.from({ length: 30 }, (_, index) => <g key={index}><text className="bench-grid-label" x={565 + index * 24} y="267" textAnchor="middle" fill="#646c68" fontSize="12">{index + 1}</text><text className="bench-grid-label" x={565 + index * 24} y="518" textAnchor="middle" fill="#646c68" fontSize="12">{index + 1}</text></g>)}
+            {Array.from('abcdefghij', (letter, index) => <g key={letter}><text className="bench-grid-label" x="542" y={(index < 5 ? 276 + index * 22 : 414 + (index - 5) * 22) + 4} textAnchor="middle" fill="#5d6863" fontSize="14">{letter}</text><text className="bench-grid-label" x="1293" y={(index < 5 ? 276 + index * 22 : 414 + (index - 5) * 22) + 4} textAnchor="middle" fill="#5d6863" fontSize="14">{letter}</text></g>)}
             {activeNet && BREADBOARD_HOLES.filter(hole => nets.get(pinRefKey({ kind: 'breadboard', pinId: hole.id })) === activeNet).map(hole => <circle key={`highlight:${hole.id}`} cx={hole.x} cy={hole.y} r="10" fill="#b4d7c0" />)}
             {BREADBOARD_HOLES.map(hole => endpoint({ kind: 'breadboard', pinId: hole.id }, hole))}
             {layout.wires.map((wire, index) => {
@@ -427,7 +485,12 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
                 <circle cx={a.x} cy={a.y} r="4" fill="#3d4445" /><circle cx={b.x} cy={b.y} r="4" fill="#3d4445" />
               </g>;
             })}
-            {layout.components.map(part => <g key={part.instanceId} transform={dragPreview?.id === part.instanceId ? `translate(${dragPreview.x} ${dragPreview.y})` : undefined} opacity={dragPreview?.id === part.instanceId ? .7 : 1}><BenchPart part={part} lit={scenario ? !!inspection?.passed && pins[scenario.outputPin] === 1 : lit?.get(part.instanceId) ?? false} selected={selectedPart?.instanceId === part.instanceId} onSelect={() => { setSelection({ kind: 'part', id: part.instanceId }); setLocated(null); }} />{PARTS.get(part.componentId)?.pins.map(pin => { const point = componentPinPoint(part, pin.id); return point ? endpoint({ kind: 'component', instanceId: part.instanceId, pinId: pin.id }, point) : null; })}</g>)}
+            {layout.components.map(part => <g key={part.instanceId} transform={dragPreview?.id === part.instanceId ? `translate(${dragPreview.x} ${dragPreview.y})` : undefined} opacity={dragPreview?.id === part.instanceId ? .7 : 1}><BenchPart part={part} lit={scenario ? !!inspection?.passed && pins[scenario.outputPin] === 1 : lit?.get(part.instanceId) ?? false} selected={selectedPart?.instanceId === part.instanceId} onSelect={() => { setSelection({ kind: 'part', id: part.instanceId }); setLocated(null); }} />{PARTS.get(part.componentId)?.pins.map(pin => {
+              const seated = componentPinPoint(part, pin.id); if (!seated) return null;
+              const ghost = legDragPreview?.instanceId === part.instanceId && legDragPreview.pinId === pin.id ? legDragPreview : null;
+              return <g key={pin.id}>{ghost && <line x1={seated.x} y1={seated.y} x2={ghost.x} y2={ghost.y} className="bench-lead-stretch" />}{endpoint({ kind: 'component', instanceId: part.instanceId, pinId: pin.id }, ghost ?? seated)}</g>;
+            })}</g>)}
+            {placing && placingPoint && <g className="bench-placing-ghost"><BenchPart part={{ instanceId: '__placing__', componentId: placing, x: placingPoint.x, y: placingPoint.y, holes: {} }} lit={false} selected={false} onSelect={() => {}} /></g>}
             {boardPins.map(pin => { const point = boardPinPoint(boardKey, pin.id); return point ? endpoint({ kind: 'board', pinId: pin.id }, point) : null; })}
             {from && cursor && <path d={wirePath([from, ...route, cursor])} stroke={color} className="bench-wire-preview" />}
           </g>
@@ -464,7 +527,7 @@ function PhysicalBench({ boardKey, pins, layout: controlled, onLayoutChange, sce
       <span>{scenario ? `Teaching circuit · D${scenario.outputPin} ${pins[scenario.outputPin] ? 'HIGH' : 'LOW'}` : 'Live pin levels · connection model'} · LED current / damage are not simulated.</span>
       <details>
         <summary>How to use the bench</summary>
-        <p>Click a pin, then a free socket to wire. A–e holes at one number share a strip; f–j form another. The center trench separates them. The four rails are separate and each runs continuously end to end on this board. Check the markings on real breadboards: some have split rails. Hover a hole to highlight its connected net. Pinch or Ctrl/⌘ + scroll to zoom. Drag empty space or hold Space to pan. + / − zoom and Home fits the circuit when the canvas is focused. Select a jumper and Delete to remove; Ctrl/⌘ Z undoes circuit edits. Find a pin locates an endpoint, then offers a keyboard-accessible button to start or finish a wire.</p>
+        <p>+ Parts picks up a new part — click anywhere on the board to drop it; it seats automatically when close to free holes. Drag a part's body to move the whole thing as one piece. Drag a single lead to nudge just that connection into a nearby hole, independent of the rest of the part — a short, deliberate move, not a relocation. Click a pin, then a free socket, to wire two points; click empty bench in between to bend the route. A–e holes at one number share a strip; f–j form another. The center trench separates them. The four rails are separate and each runs continuously end to end on this board. Check the markings on real breadboards: some have split rails. Hover a hole to highlight its connected net. Pinch or Ctrl/⌘ + scroll to zoom. Drag empty space or hold Space to pan. + / − zoom and Home fits the circuit when the canvas is focused. Select a part, lead, or jumper and Delete to remove it; Ctrl/⌘ Z undoes circuit edits. Find a pin locates an endpoint, then offers a keyboard-accessible button to start or finish a wire.</p>
       </details>
       {onButton && <button type="button" disabled={!enabled}
         onPointerDown={event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); press.current = true; onButton(true); }}

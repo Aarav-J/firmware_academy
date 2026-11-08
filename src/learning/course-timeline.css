@@ -9,8 +9,8 @@
 }
 
 .ct-hero { display: flex; flex-direction: column; gap: 14px; max-width: 640px; }
-.ct-eyebrow { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--accent); font-family: var(--code-font); font-size: 12px; letter-spacing: .08em; }
-.ct-hero h1 { margin: 0; font-size: clamp(30px, 4vw, 40px); line-height: 1.1; font-weight: 500; letter-spacing: -.02em; text-wrap: balance; }
+.ct-hero .ct-eyebrow { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--accent); font-family: var(--code-font); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; }
+.ct-hero h1 { margin: 0; font-size: clamp(32px, 4.4vw, 46px); line-height: 1.08; font-weight: 700; letter-spacing: -.045em; text-wrap: balance; }
 .ct-hero p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; text-wrap: pretty; }
 
 .ct-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -26,7 +26,7 @@
 .ct-card-progress-track { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
 .ct-card-progress-track > div { height: 100%; background: var(--success); }
 .ct-card-progress-label { font-family: var(--code-font); font-size: 12px; color: var(--muted); }
-.ct-card-locked-badge { align-self: flex-start; padding: 3px 8px; border-radius: 4px; background: var(--chip); color: var(--muted); font-family: var(--code-font); font-size: 11px; }
+.ct-card-locked-badge { align-self: flex-start; padding: 5px 10px; border-radius: 50px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: var(--code-font); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 
 .ct-start { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 22px; }
 .ct-primary { display: inline-flex; align-items: center; justify-content: center; gap: 16px; min-height: 46px; padding: 11px 19px; border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; }
@@ -38,7 +38,7 @@
 
 .ct-curriculum { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
 .ct-path-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; padding-bottom: 8px; }
-.ct-path-heading h2 { margin: 0; font-size: 20px; line-height: 1.3; letter-spacing: -.02em; font-weight: 500; }
+.ct-path-heading h2 { margin: 0; font-size: 21px; line-height: 1.3; letter-spacing: -.035em; font-weight: 700; }
 .ct-path-heading p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
 .ct-path-heading > span { color: var(--muted); font-size: 12px; line-height: 1.6; white-space: nowrap; }
 
